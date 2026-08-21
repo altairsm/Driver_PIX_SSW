@@ -1,4 +1,4 @@
-const CACHE = 'driverpix-v2';
+const CACHE = 'driverpix-v3';
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
@@ -9,5 +9,6 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  if (e.request.url.includes('/api/')) return;
   e.respondWith(fetch(e.request));
 });
