@@ -27,7 +27,7 @@ const upload = multer({
       cb(new Error('Apenas arquivos .csv são permitidos'));
     }
   },
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: 100 * 1024 * 1024 },
 });
 
 const router = Router();

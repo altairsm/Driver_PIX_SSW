@@ -38,7 +38,7 @@ export default function Login() {
           navigate('/driver/regras-pagamento');
         }
       } else {
-        navigate('/admin/pagamentos');
+        navigate('/admin/operacional');
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Erro ao fazer login');
