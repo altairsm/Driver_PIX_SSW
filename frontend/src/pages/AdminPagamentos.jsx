@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getResumo, confirmarPagamento, getAdminQuinzenas, getConfig } from '../services/api';
+import { getResumo, confirmarPagamento, getAdminQuinzenas, getConfig, getUnidades } from '../services/api';
 import Topbar from '../components/Topbar';
 
 function formatQuinzena(inicio, fim) {
@@ -28,17 +28,19 @@ export default function AdminPagamentos() {
   const [error, setError] = useState('');
   const [confirmando, setConfirmando] = useState(null);
   const [config, setConfig] = useState(null);
+  const [unidades, setUnidades] = useState([]);
+  const [unidadeFilter, setUnidadeFilter] = useState('');
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isAdmin = user.role === 'admin';
 
   const qzAtual = quinzenas[qzIdx] || null;
 
-  const fetchResumo = useCallback(async (inicio, fim) => {
+  const fetchResumo = useCallback(async (inicio, fim, unidade) => {
     setLoading(true);
     setError('');
     try {
-      const data = await getResumo(inicio, fim);
+      const data = await getResumo(inicio, fim, unidade || undefined);
       setResumo(data);
     } catch (err) {
       setError('Erro ao buscar pagamentos');
@@ -50,9 +52,10 @@ export default function AdminPagamentos() {
   useEffect(() => {
     const init = async () => {
       try {
-        const [qzs, cfg] = await Promise.all([getAdminQuinzenas(), getConfig()]);
+        const [qzs, cfg, uns] = await Promise.all([getAdminQuinzenas(), getConfig(), getUnidades()]);
         setQuinzenas(qzs);
         setConfig(cfg);
+        setUnidades(uns);
         if (qzs.length > 0) {
           const q = qzs[0];
           await fetchResumo(q.inicio.slice(0, 10), q.fim.slice(0, 10));
@@ -71,7 +74,7 @@ export default function AdminPagamentos() {
       const newIdx = qzIdx + 1;
       setQzIdx(newIdx);
       const q = quinzenas[newIdx];
-      await fetchResumo(q.inicio.slice(0, 10), q.fim.slice(0, 10));
+      await fetchResumo(q.inicio.slice(0, 10), q.fim.slice(0, 10), unidadeFilter || null);
     }
   };
 
@@ -80,7 +83,15 @@ export default function AdminPagamentos() {
       const newIdx = qzIdx - 1;
       setQzIdx(newIdx);
       const q = quinzenas[newIdx];
-      await fetchResumo(q.inicio.slice(0, 10), q.fim.slice(0, 10));
+      await fetchResumo(q.inicio.slice(0, 10), q.fim.slice(0, 10), unidadeFilter || null);
+    }
+  };
+
+  const handleUnidadeChange = async (e) => {
+    const val = e.target.value;
+    setUnidadeFilter(val);
+    if (qzAtual) {
+      await fetchResumo(qzAtual.inicio.slice(0, 10), qzAtual.fim.slice(0, 10), val || null);
     }
   };
 
@@ -110,6 +121,12 @@ export default function AdminPagamentos() {
           <button onClick={handlePrev} disabled={qzIdx >= quinzenas.length - 1} style={styles.navBtn}>&lt; Anterior</button>
           <div style={styles.quinzenaLabel}>{qzAtual ? formatQuinzena(qzAtual.inicio, qzAtual.fim) : '—'}</div>
           <button onClick={handleNext} disabled={qzIdx <= 0} style={styles.navBtn}>Próximo &gt;</button>
+          {unidades.length > 0 && (
+            <select value={unidadeFilter} onChange={handleUnidadeChange} style={styles.unidadeSelect}>
+              <option value="">Todas as unidades</option>
+              {unidades.map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+          )}
           {qzAtual && (
             <div style={styles.pagDateLabel}>
               Pagamento: {calcPagamento(qzAtual.fim.slice(0, 10), config?.dias_uteis_pagamento || 4).toLocaleDateString('pt-BR')}
@@ -201,6 +218,7 @@ const styles = {
   navBtn: { background: '#1e2230', border: '1px solid #2a2f3e', color: '#e8eaf0', padding: '8px 16px', borderRadius: 4, cursor: 'pointer', fontSize: '0.82rem', fontFamily: "'IBM Plex Mono', monospace" },
   quinzenaLabel: { fontSize: '1.1rem', fontWeight: 600, color: '#f0c040', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '2px', minWidth: 180, textAlign: 'center' },
   pagDateLabel: { fontSize: '0.78rem', color: '#3de8a0', fontFamily: "'IBM Plex Mono', monospace" },
+  unidadeSelect: { background: '#1e2230', border: '1px solid #2a2f3e', color: '#e8eaf0', padding: '8px 12px', borderRadius: 4, fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.82rem' },
   error: { background: '#2a1a1a', border: '1px solid #ff5a5a', color: '#ff5a5a', padding: '10px 16px', borderRadius: 4, marginBottom: 20 },
   resumoCards: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 },
   rCard: { background: '#161920', border: '1px solid #2a2f3e', borderRadius: 8, padding: '16px', display: 'flex', flexDirection: 'column', gap: 4 },

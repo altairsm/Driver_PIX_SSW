@@ -27,7 +27,7 @@ export async function getDriverDashboard(cpf, inicio, fim) {
     ) pc ON true
     WHERE r.motorista_cpf = $1
       AND c.ocorrencia_data BETWEEN $2::date AND $3::date
-      AND UPPER(c.ocorrencia) = 'MERCADORIA ENTREGUE'
+      AND EXISTS (SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%')
   `;
 
   const result = await pool.query(query, [cpf, inicio, fim]);
@@ -47,7 +47,7 @@ export async function getDriverRomaneios(cpf, inicio, fim) {
        LIMIT 1) AS solicitacao_info
     FROM ssw_romaneios r
     LEFT JOIN ssw_ctrcs c ON c.id_romaneio = r.id_romaneio
-      AND UPPER(c.ocorrencia) = 'MERCADORIA ENTREGUE'
+      AND EXISTS (SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%')
     LEFT JOIN LATERAL (
       SELECT valor_entrega FROM tabela_preco_cidade pc
       WHERE LOWER(pc.cidade) = LOWER(TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)))
@@ -79,7 +79,7 @@ export async function getDriverRomaneioDetalhes(cpf, idRomaneio, inicio, fim) {
     ) pc ON true
     WHERE c.id_romaneio = $1
       AND EXISTS (SELECT 1 FROM ssw_romaneios WHERE id_romaneio = c.id_romaneio AND motorista_cpf = $2)
-      AND UPPER(c.ocorrencia) = 'MERCADORIA ENTREGUE'
+      AND EXISTS (SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%')
       AND c.ocorrencia_data BETWEEN $3::date AND $4::date
     GROUP BY c.cidade_entrega, c.bairro
     ORDER BY c.cidade_entrega, c.bairro
@@ -131,7 +131,7 @@ export async function getProdutividade(cpf, inicio, fim) {
     WHERE r.motorista_cpf = $1
       AND c.ocorrencia_data >= $2::date
       AND c.ocorrencia_data <= $3::date
-      AND UPPER(c.ocorrencia) = 'MERCADORIA ENTREGUE'
+      AND EXISTS (SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%')
     GROUP BY c.ocorrencia_data
     ORDER BY c.ocorrencia_data
   `, [cpf, inicio, fim]);
@@ -142,7 +142,7 @@ export async function getEficiencia(cpf) {
   const result = await pool.query(`
     SELECT
       CASE
-        WHEN UPPER(c.ocorrencia) = 'MERCADORIA ENTREGUE' THEN 'entrega'
+        WHEN EXISTS (SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%') THEN 'entrega'
         ELSE 'insucesso'
       END AS evento,
       COUNT(*) AS quantidade
@@ -151,7 +151,7 @@ export async function getEficiencia(cpf) {
     WHERE r.motorista_cpf = $1
       AND c.ocorrencia_data >= (CURRENT_DATE - INTERVAL '30 days')::date
     GROUP BY CASE
-      WHEN UPPER(c.ocorrencia) = 'MERCADORIA ENTREGUE' THEN 'entrega'
+      WHEN EXISTS (SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%') THEN 'entrega'
       ELSE 'insucesso'
     END
     ORDER BY quantidade DESC
@@ -197,7 +197,7 @@ export async function solicitarPagamento(cpf, idRomaneio) {
       LIMIT 1
     ) pc ON true
     WHERE c.id_romaneio = $1
-      AND UPPER(c.ocorrencia) = 'MERCADORIA ENTREGUE'
+      AND EXISTS (SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%')
   `, [idRomaneio]);
 
   const valorEntregas = Number(entregas[0]?.valor_entregas) || 0;
@@ -260,7 +260,9 @@ export async function solicitarPagamento(cpf, idRomaneio) {
 
   const { rows: eficienciaData } = await pool.query(`
     SELECT
-      COUNT(*) FILTER (WHERE UPPER(c.ocorrencia) = 'MERCADORIA ENTREGUE') AS entregas,
+      COUNT(*) FILTER (WHERE EXISTS (
+        SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+      )) AS entregas,
       COUNT(*) AS total
     FROM ssw_ctrcs c
     JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
@@ -351,7 +353,7 @@ export async function getBonusD0(cpf, inicio, fim) {
     FROM ssw_ctrcs c
     JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
     WHERE r.motorista_cpf = $1
-      AND UPPER(c.ocorrencia) = 'MERCADORIA ENTREGUE'
+      AND EXISTS (SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%')
       AND c.ocorrencia_data = c.data_emissao
       AND c.ocorrencia_data >= $2::date
       AND c.ocorrencia_data <= $3::date
@@ -371,28 +373,68 @@ export async function getBonusD0(cpf, inicio, fim) {
   };
 }
 
-export async function getEficienciaTodos() {
+export async function getEficienciaTodos(inicio, fim, tipo) {
+  const params = [];
+  const conditions = [];
+
+  const dataInicio = inicio || `(CURRENT_DATE - INTERVAL '30 days')::date`;
+  const dataFim = fim || `CURRENT_DATE::date`;
+
+  if (inicio) { params.push(inicio); }
+  if (fim) { params.push(fim); }
+  if (tipo) { params.push(tipo); conditions.push(`m.tipo = $${params.length}`); }
+
+  const whereTipo = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
+  const dateFilter = (col) => {
+    if (inicio && fim) return `${col} >= $1 AND ${col} <= $2`;
+    if (inicio) return `${col} >= $1`;
+    if (fim) return `${col} <= $1`;
+    return `${col} >= (CURRENT_DATE - INTERVAL '30 days')::date`;
+  };
+
   const result = await pool.query(`
     SELECT
       r.motorista_cpf AS cpf,
       r.motorista_nome AS nome,
-      COUNT(*) FILTER (WHERE UPPER(c.ocorrencia) = 'MERCADORIA ENTREGUE')::int AS entregas,
+      m.tipo,
+      COUNT(*) FILTER (WHERE EXISTS (
+        SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+      ))::int AS entregas,
       COUNT(*)::int AS total,
-      ROUND(COUNT(*) FILTER (WHERE UPPER(c.ocorrencia) = 'MERCADORIA ENTREGUE') * 100.0 / NULLIF(COUNT(*), 0), 2)::numeric(5,2) AS pct_eficiencia
+      ROUND(COUNT(*) FILTER (WHERE EXISTS (
+        SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+      )) * 100.0 / NULLIF(COUNT(*), 0), 2)::numeric(5,2) AS pct_eficiencia
     FROM ssw_ctrcs c
     JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
-    WHERE c.ocorrencia_data >= (CURRENT_DATE - INTERVAL '30 days')::date
-    GROUP BY r.motorista_cpf, r.motorista_nome
+    JOIN motoristas m ON m.cpf = r.motorista_cpf
+    WHERE ${dateFilter('c.ocorrencia_data')} ${whereTipo}
+    GROUP BY r.motorista_cpf, r.motorista_nome, m.tipo
     ORDER BY pct_eficiencia DESC
-  `);
+  `, params);
   return result.rows;
 }
 
-export async function getAppUsageTodos() {
+export async function getAppUsageTodos(inicio, fim, tipo) {
+  const params = [];
+  const conditions = [];
+
+  if (inicio) { params.push(inicio); }
+  if (fim) { params.push(fim); }
+  if (tipo) { params.push(tipo); conditions.push(`m.tipo = $${params.length}`); }
+
+  const whereTipo = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
+  const dateFilter = (col) => {
+    if (inicio && fim) return `${col} >= $1 AND ${col} <= $2`;
+    if (inicio) return `${col} >= $1`;
+    if (fim) return `${col} <= $1`;
+    return `${col} >= (CURRENT_DATE - INTERVAL '30 days')::date`;
+  };
+
   const result = await pool.query(`
     SELECT
       r.motorista_cpf AS cpf,
       r.motorista_nome AS nome,
+      m.tipo,
       COUNT(*) FILTER (WHERE o.origem_ocorrencia = 'APP')::int AS app,
       COUNT(*) FILTER (WHERE o.origem_ocorrencia = 'BASE')::int AS base,
       COUNT(*) FILTER (WHERE o.origem_ocorrencia IS NULL OR o.origem_ocorrencia = '')::int AS sem_origem,
@@ -401,9 +443,10 @@ export async function getAppUsageTodos() {
     FROM ssw_ocorrencias o
     JOIN ssw_ctrcs c ON c.ctrc = o.ctrc_normalizado
     JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
-    WHERE c.ocorrencia_data >= (CURRENT_DATE - INTERVAL '30 days')::date
-    GROUP BY r.motorista_cpf, r.motorista_nome
+    JOIN motoristas m ON m.cpf = r.motorista_cpf
+    WHERE ${dateFilter('c.ocorrencia_data')} ${whereTipo}
+    GROUP BY r.motorista_cpf, r.motorista_nome, m.tipo
     ORDER BY pct_app DESC
-  `);
+  `, params);
   return result.rows;
 }

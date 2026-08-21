@@ -17,8 +17,8 @@ router.post('/login', async (req, res) => {
     const isCpf = /^\d{11}$/.test(clean);
 
     const query = isCpf
-      ? 'SELECT cpf, nome, email, role, password_hash, leu_regras FROM motoristas WHERE cpf = $1'
-      : 'SELECT cpf, nome, email, role, password_hash, leu_regras FROM motoristas WHERE LOWER(email) = LOWER($1)';
+      ? 'SELECT cpf, nome, email, role, password_hash, leu_regras, unidade FROM motoristas WHERE cpf = $1'
+      : 'SELECT cpf, nome, email, role, password_hash, leu_regras, unidade FROM motoristas WHERE LOWER(email) = LOWER($1)';
 
     const result = await pool.query(query, [isCpf ? clean : identifier]);
 
@@ -41,11 +41,12 @@ router.post('/login', async (req, res) => {
       cpf: user.cpf,
       nome: user.nome,
       role: user.role || 'motorista',
+      unidade: user.unidade || null,
     });
 
     res.json({
       token,
-      user: { cpf: user.cpf, nome: user.nome, email: user.email, role: user.role || 'motorista', leu_regras: user.leu_regras },
+      user: { cpf: user.cpf, nome: user.nome, email: user.email, role: user.role || 'motorista', leu_regras: user.leu_regras, unidade: user.unidade || null },
     });
   } catch (err) {
     console.error('Login error:', err);

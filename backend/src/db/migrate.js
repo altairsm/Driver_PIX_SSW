@@ -340,6 +340,70 @@ export async function runMigrations() {
       console.log('  taxas_adiantamento already has data, skipping seed');
     }
 
+    await pool.query(`CREATE TABLE IF NOT EXISTS ssw_455 (
+      id SERIAL PRIMARY KEY,
+      ctrc VARCHAR(30) NOT NULL,
+      ctrc_normalizado VARCHAR(30) NOT NULL,
+      serie_numero_cte VARCHAR(20),
+      data_emissao DATE,
+      cnpj_pagador VARCHAR(20),
+      cliente_pagador VARCHAR(200),
+      unidade_receptora VARCHAR(10),
+      cidade_entrega VARCHAR(100),
+      uf_entrega VARCHAR(2),
+      cep_entrega VARCHAR(10),
+      peso_real NUMERIC(10,3) DEFAULT 0,
+      volumes INTEGER DEFAULT 0,
+      valor_frete NUMERIC(10,2) DEFAULT 0,
+      tipo_frete VARCHAR(10),
+      data_baixa DATE,
+      ocorrencia VARCHAR(200),
+      controle_duplicidade VARCHAR(100) UNIQUE NOT NULL,
+      importado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`);
+    console.log('  -> ssw_455');
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS pagadores (
+      id SERIAL PRIMARY KEY,
+      cnpj VARCHAR(20) UNIQUE NOT NULL,
+      razao_social VARCHAR(200) NOT NULL,
+      nome_simplificado VARCHAR(100),
+      ativo BOOLEAN DEFAULT true,
+      criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`);
+    console.log('  -> pagadores');
+
+    for (const col of [
+      "ADD COLUMN IF NOT EXISTS unidade VARCHAR(10)",
+      "ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) DEFAULT 'funcionario'"
+    ]) {
+      await pool.query(`DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='motoristas') THEN ALTER TABLE motoristas ${col}; END IF; END $$`);
+    }
+    console.log('  -> motoristas (unidade, tipo)');
+
+    for (const col of [
+      "ADD COLUMN IF NOT EXISTS unidade_receptora VARCHAR(10)"
+    ]) {
+      await pool.query(`DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='ssw_ctrcs') THEN ALTER TABLE ssw_ctrcs ${col}; END IF; END $$`);
+    }
+    console.log('  -> ssw_ctrcs (unidade_receptora)');
+
+    for (const col of [
+      "ADD COLUMN IF NOT EXISTS numero_nota_fiscal VARCHAR(50)",
+      "ADD COLUMN IF NOT EXISTS previsao_entrega DATE",
+      "ADD COLUMN IF NOT EXISTS data_ultima_ocorrencia DATE"
+    ]) {
+      await pool.query(`DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='ssw_455') THEN ALTER TABLE ssw_455 ${col}; END IF; END $$`);
+    }
+    console.log('  -> ssw_455 (numero_nota_fiscal, previsao_entrega, data_ultima_ocorrencia)');
+
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_ssw_455_ctrc ON ssw_455 (ctrc_normalizado)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_ssw_455_pagador ON ssw_455 (cnpj_pagador)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_ssw_455_unidade ON ssw_455 (unidade_receptora)');
+    try { await pool.query('CREATE INDEX IF NOT EXISTS idx_motoristas_unidade ON motoristas (unidade)'); } catch {}
+    console.log('  indexes 455/pagadores created');
+
     console.log('Migrations: checking seed data...');
 
     await seedIfEmpty('tabela_preco_cidade', `
@@ -374,6 +438,35 @@ export async function runMigrations() {
     }
 
     console.log('Migrations: all seed data done');
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS ocorrencia_catalogo (
+      id SERIAL PRIMARY KEY,
+      codigo VARCHAR(10),
+      descricao VARCHAR(500) NOT NULL,
+      finalizadora BOOLEAN DEFAULT false,
+      criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (descricao)
+    )`);
+    console.log('  -> ocorrencia_catalogo');
+
+    await seedIfEmpty('ocorrencia_catalogo', `
+      INSERT INTO ocorrencia_catalogo (codigo, descricao, finalizadora) VALUES
+        ('1', 'MERCADORIA ENTREGUE', true),
+        ('2', 'MERCADORIA DEVOLVIDA AO REMETENTE', true),
+        ('3', 'CTRC BAIXADO/CANCELADO', true),
+        (NULL, 'SAIDA PARA ENTREGA', false),
+        (NULL, 'ENDERECO NAO LOCALIZADO', false),
+        (NULL, 'LOCAL DE ENTREGA FECHADO/AUSENTE', false),
+        (NULL, 'ENTREGA AGENDADA', false),
+        (NULL, 'ESTORNO DE BAIXA/ENTREGA ANTERIOR', false),
+        (NULL, 'RECEBEDOR RECUSA/NAO PODE RECEBER MERCADORIA', false),
+        (NULL, 'ENTREGA PREJUDICADA PELO HORARIO', false),
+        (NULL, 'FALTA DE VOLUME', false),
+        (NULL, 'DEVOLUCAO AUTORIZADA', false),
+        (NULL, 'MERCAD REPASSADA P/ PROX TRANSPORTADORA', false)
+      ON CONFLICT (descricao) DO NOTHING
+    `);
+
   } catch (err) {
     console.error('Migration error:', err);
     throw err;

@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  backend:
+    image: altairsm/driver-pix-ssw-backend:latest
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres_postgres
+      DB_PORT: 5432
+      DB_NAME: driverfds
+      DB_USER: escala_admin
+      DB_PASSWORD: f18f8dd7ad0683fb97c91eb4852ff645
+      JWT_SECRET: 0e560c48d422acdbf0b106df4dc154c5
+      PORT: 3001
+      GOOGLE_MAPS_API_KEY: AIzaSyArrv1bWt3ye29tPLyDkj38qc6P70jCctM
+    networks:
+      - sactudonet
+
+  frontend:
+    image: altairsm/driver-pix-ssw-frontend:latest
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - sactudonet
+    deploy:
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.driverfds.rule=Host(`driverfds.intuitiva.log.br`)"
+        - "traefik.http.routers.driverfds.entrypoints=websecure"
+        - "traefik.http.routers.driverfds.tls=true"
+        - "traefik.http.routers.driverfds.tls.certresolver=letsencryptresolver"
+        - "traefik.http.services.driverfds.loadbalancer.server.port=80"
+
+networks:
+  sactudonet:
+    external: true

@@ -5,7 +5,7 @@ import { requireRole } from '../middleware/auth.js';
 import {
   calcularPagamentos, confirmarPagamento,
   listarMotoristas, criarMotorista, atualizarMotorista, deletarMotorista,
-  getQuinzenasAdmin, getCidadesSemPreco, getCtrcsParados
+  getQuinzenasAdmin, getCidadesSemPreco, getCtrcsParados, getCtrcsParadosDetalhado
 } from '../services/paymentService.js';
 import { getEficienciaTodos, getAppUsageTodos } from '../services/driverService.js';
 import { enviarSenhaPorEmail } from '../services/emailService.js';
@@ -24,12 +24,12 @@ router.get('/quinzenas', async (req, res) => {
 
 router.get('/pagamentos', async (req, res) => {
   try {
-    const { inicio, fim } = req.query;
+    const { inicio, fim, unidade } = req.query;
     if (!inicio || !fim) {
       return res.status(400).json({ error: 'Parâmetros inicio e fim são obrigatórios' });
     }
 
-    const resultado = await calcularPagamentos(inicio, fim);
+    const resultado = await calcularPagamentos(inicio, fim, unidade || null);
     res.json(resultado);
   } catch (err) {
     console.error('Erro ao calcular pagamentos:', err);
@@ -64,7 +64,7 @@ router.post('/confirmar-pagamento', requireRole('admin'), async (req, res) => {
 
 router.post('/motoristas', requireRole('admin'), async (req, res) => {
   try {
-    const { cpf, nome, telefone, pix_tipo } = req.body;
+    const { cpf, nome, telefone, pix_tipo, unidade } = req.body;
     if (!cpf || !nome) {
       return res.status(400).json({ error: 'CPF e nome são obrigatórios' });
     }
@@ -105,12 +105,12 @@ router.delete('/motoristas/:cpf', requireRole('admin'), async (req, res) => {
 
 router.get('/resumo', async (req, res) => {
   try {
-    const { inicio, fim } = req.query;
+    const { inicio, fim, unidade } = req.query;
     if (!inicio || !fim) {
       return res.status(400).json({ error: 'Parâmetros inicio e fim são obrigatórios' });
     }
 
-    const pagamentos = await calcularPagamentos(inicio, fim);
+    const pagamentos = await calcularPagamentos(inicio, fim, unidade || null);
 
     const resumo = {
       total_motoristas: pagamentos.length,
@@ -183,7 +183,8 @@ router.get('/ctrcs-sem-preco', async (req, res) => {
 
 router.get('/eficiencia-motoristas', async (req, res) => {
   try {
-    const data = await getEficienciaTodos();
+    const { inicio, fim, tipo } = req.query;
+    const data = await getEficienciaTodos(inicio || null, fim || null, tipo || null);
     res.json(data);
   } catch (err) {
     console.error('Erro ao buscar eficiência dos motoristas:', err);
@@ -193,7 +194,8 @@ router.get('/eficiencia-motoristas', async (req, res) => {
 
 router.get('/app-usage-motoristas', async (req, res) => {
   try {
-    const data = await getAppUsageTodos();
+    const { inicio, fim, tipo } = req.query;
+    const data = await getAppUsageTodos(inicio || null, fim || null, tipo || null);
     res.json(data);
   } catch (err) {
     console.error('Erro ao buscar uso do app:', err);
@@ -208,6 +210,94 @@ router.get('/ctrcs-parados', async (req, res) => {
   } catch (err) {
     console.error('Erro ao buscar CTRCs parados:', err);
     res.status(500).json({ error: 'Erro ao buscar CTRCs parados' });
+  }
+});
+
+router.get('/ctrcs-parados-detalhado', async (req, res) => {
+  try {
+    const data = await getCtrcsParadosDetalhado();
+    res.json(data);
+  } catch (err) {
+    console.error('Erro ao buscar CTRCs parados detalhado:', err);
+    res.status(500).json({ error: 'Erro ao buscar CTRCs parados detalhado' });
+  }
+});
+
+router.get('/unidades', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT DISTINCT unidade_receptora AS unidade
+      FROM ssw_455
+      WHERE unidade_receptora IS NOT NULL AND unidade_receptora != ''
+      ORDER BY unidade_receptora
+    `);
+    res.json(rows.map(r => r.unidade));
+  } catch (err) {
+    console.error('Erro ao buscar unidades:', err);
+    res.status(500).json({ error: 'Erro ao buscar unidades' });
+  }
+});
+
+router.get('/gestao', async (req, res) => {
+  try {
+    const { inicio, fim, unidade } = req.query;
+    const params = [];
+    const conditions = [];
+
+    if (inicio) { params.push(inicio); conditions.push(`data_emissao >= $${params.length}::date`); }
+    if (fim) { params.push(fim); conditions.push(`data_emissao <= $${params.length}::date`); }
+    if (unidade) { params.push(unidade); conditions.push(`unidade_receptora = $${params.length}`); }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const { rows: [resumo] } = await pool.query(`
+      SELECT
+        COUNT(*)::int AS total_entregas,
+        COALESCE(SUM(valor_frete), 0)::numeric(12,2) AS frete_total,
+        COALESCE(SUM(peso_real), 0)::numeric(12,3) AS peso_total,
+        COALESCE(SUM(volumes), 0)::int AS volumes_total,
+        COUNT(DISTINCT cnpj_pagador)::int AS cnpjs_distintos,
+        COUNT(DISTINCT unidade_receptora)::int AS unidades_distintas
+      FROM ssw_455 ${where}
+    `, params);
+
+    const { rows: porPagador } = await pool.query(`
+      SELECT
+        v.cnpj_pagador,
+        COALESCE(p.razao_social, v.cliente_pagador) AS razao_social,
+        p.nome_simplificado,
+        p.ativo,
+        COUNT(*)::int AS total_entregas,
+        COALESCE(SUM(v.valor_frete), 0)::numeric(12,2) AS frete_total,
+        COALESCE(SUM(v.peso_real), 0)::numeric(12,3) AS peso_total,
+        COALESCE(SUM(v.volumes), 0)::int AS volumes_total,
+        ARRAY_AGG(DISTINCT v.unidade_receptora) FILTER (WHERE v.unidade_receptora IS NOT NULL) AS unidades
+      FROM ssw_455 v
+      LEFT JOIN pagadores p ON p.cnpj = v.cnpj_pagador
+      ${where}
+      GROUP BY v.cnpj_pagador, p.razao_social, p.nome_simplificado, p.ativo, v.cliente_pagador
+      ORDER BY frete_total DESC
+    `, params);
+
+    const { rows: porUnidade } = await pool.query(`
+      SELECT
+        unidade_receptora,
+        COUNT(*)::int AS total_entregas,
+        COALESCE(SUM(valor_frete), 0)::numeric(12,2) AS frete_total,
+        COALESCE(SUM(peso_real), 0)::numeric(12,3) AS peso_total,
+        COALESCE(SUM(volumes), 0)::int AS volumes_total,
+        COUNT(DISTINCT cnpj_pagador)::int AS cnpjs_distintos
+      FROM ssw_455
+      ${where}
+      ${where ? 'AND' : 'WHERE'} unidade_receptora IS NOT NULL AND unidade_receptora != ''
+      GROUP BY unidade_receptora
+      ORDER BY frete_total DESC
+    `, params);
+
+    res.json({ resumo_geral: resumo || {}, por_pagador: porPagador, por_unidade: porUnidade });
+  } catch (err) {
+    console.error('Erro ao buscar dados da gestão:', err);
+    res.status(500).json({ error: 'Erro ao buscar dados da gestão' });
   }
 });
 

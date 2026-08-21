@@ -129,8 +129,10 @@ export async function getPagamentos(inicio, fim) {
   return data;
 }
 
-export async function getResumo(inicio, fim) {
-  const { data } = await api.get('/admin/resumo', { params: { inicio, fim } });
+export async function getResumo(inicio, fim, unidade) {
+  const params = { inicio, fim };
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/resumo', { params });
   return data;
 }
 
@@ -242,18 +244,104 @@ export async function getCtrcsSemPreco(inicio, fim) {
 }
 
 // Admin Dashboard
-export async function getEficienciaMotoristas() {
-  const { data } = await api.get('/admin/eficiencia-motoristas');
+export async function getEficienciaMotoristas(inicio, fim, tipo) {
+  const params = {};
+  if (inicio) params.inicio = inicio;
+  if (fim) params.fim = fim;
+  if (tipo) params.tipo = tipo;
+  const { data } = await api.get('/admin/eficiencia-motoristas', { params });
   return data;
 }
 
-export async function getAppUsageMotoristas() {
-  const { data } = await api.get('/admin/app-usage-motoristas');
+export async function getAppUsageMotoristas(inicio, fim, tipo) {
+  const params = {};
+  if (inicio) params.inicio = inicio;
+  if (fim) params.fim = fim;
+  if (tipo) params.tipo = tipo;
+  const { data } = await api.get('/admin/app-usage-motoristas', { params });
   return data;
 }
 
 export async function getCtrcsParados() {
   const { data } = await api.get('/admin/ctrcs-parados');
+  return data;
+}
+
+export async function getCtrcsParadosDetalhado() {
+  const { data } = await api.get('/admin/ctrcs-parados-detalhado');
+  return data;
+}
+
+// Pagadores
+export async function getPagadores() {
+  const { data } = await api.get('/admin/pagadores');
+  return data;
+}
+
+export async function createPagador(dados) {
+  const { data } = await api.post('/admin/pagadores', dados);
+  return data;
+}
+
+export async function updatePagador(id, dados) {
+  const { data } = await api.put(`/admin/pagadores/${id}`, dados);
+  return data;
+}
+
+export async function deletePagador(id) {
+  const { data } = await api.delete(`/admin/pagadores/${id}`);
+  return data;
+}
+
+export async function getResumoPagador(cnpj, inicio, fim) {
+  const { data } = await api.get(`/admin/pagadores/${cnpj}/resumo`, { params: { inicio, fim } });
+  return data;
+}
+
+// Unidades
+export async function getUnidades() {
+  const { data } = await api.get('/admin/unidades');
+  return data;
+}
+
+// Gestão
+export async function getGestao(inicio, fim, unidade) {
+  const params = {};
+  if (inicio) params.inicio = inicio;
+  if (fim) params.fim = fim;
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/gestao', { params });
+  return data;
+}
+
+// Upload SSW 455
+export async function uploadSsw455(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await api.post('/upload/ssw-455', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
+// Ocorrências
+export async function getOcorrencias() {
+  const { data } = await api.get('/admin/ocorrencias');
+  return data;
+}
+
+export async function createOcorrencia(dados) {
+  const { data } = await api.post('/admin/ocorrencias', dados);
+  return data;
+}
+
+export async function updateOcorrencia(id, dados) {
+  const { data } = await api.put(`/admin/ocorrencias/${id}`, dados);
+  return data;
+}
+
+export async function deleteOcorrencia(id) {
+  const { data } = await api.delete(`/admin/ocorrencias/${id}`);
   return data;
 }
 

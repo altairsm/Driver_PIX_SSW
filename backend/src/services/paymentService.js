@@ -1,6 +1,9 @@
 import { pool } from '../db/index.js';
 
-export async function calcularPagamentos(inicio, fim) {
+export async function calcularPagamentos(inicio, fim, unidade) {
+  const unidadeClause = unidade ? `AND v455.unidade_receptora = $3` : '';
+  const params = unidade ? [inicio, fim, unidade] : [inicio, fim];
+
   const query = `
     WITH entregas_periodo AS (
       SELECT
@@ -10,7 +13,8 @@ export async function calcularPagamentos(inicio, fim) {
         c.cidade_entrega,
         c.id_romaneio,
         COALESCE(c.frete_ctrc, 0) AS frete_ctrc,
-        COALESCE(pc.valor_entrega, 0) AS valor_despesa
+        COALESCE(pc.valor_entrega, 0) AS valor_despesa,
+        v455.unidade_receptora
       FROM ssw_ctrcs c
       JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
       LEFT JOIN LATERAL (
@@ -19,8 +23,10 @@ export async function calcularPagamentos(inicio, fim) {
            OR LOWER(pc.cidade) = LOWER(TRIM(c.cidade_entrega))
         LIMIT 1
       ) pc ON true
+      LEFT JOIN ssw_455 v455 ON v455.ctrc_normalizado = REPLACE(c.ctrc, ' ', '')
       WHERE c.ocorrencia_data BETWEEN $1::date AND $2::date
-        AND UPPER(c.ocorrencia) = 'MERCADORIA ENTREGUE'
+        AND EXISTS (SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%')
+        ${unidadeClause}
     ),
     resumo_motorista AS (
       SELECT
@@ -61,7 +67,7 @@ export async function calcularPagamentos(inicio, fim) {
     ORDER BY m.nome;
   `;
 
-  const result = await pool.query(query, [inicio, fim]);
+  const result = await pool.query(query, params);
   return result.rows;
 }
 
@@ -87,7 +93,7 @@ export async function confirmarPagamento(cpf, periodo) {
     ) pc ON true
     WHERE r.motorista_cpf = $1
       AND c.ocorrencia_data BETWEEN $2::date AND $3::date
-      AND UPPER(c.ocorrencia) = 'MERCADORIA ENTREGUE'
+      AND EXISTS (SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%')
   `, [cpf, inicio, fim]);
 
   const { rows: [adiantadoRow] } = await pool.query(`
@@ -139,7 +145,7 @@ export async function confirmarPagamento(cpf, periodo) {
 
 export async function listarMotoristas() {
   const result = await pool.query(`
-    SELECT cpf, nome, telefone, pix_tipo, cnpj_mei, bonus_d0, leu_regras, email, role, pre_aprovado
+    SELECT cpf, nome, telefone, pix_tipo, cnpj_mei, bonus_d0, leu_regras, email, role, pre_aprovado, unidade, tipo
     FROM motoristas
     ORDER BY nome
   `);
@@ -169,10 +175,10 @@ export async function getQuinzenasAdmin() {
 }
 
 export async function criarMotorista(dados) {
-  const { cpf, nome, telefone, pix_tipo, cnpj_mei, bonus_d0, email, role, pre_aprovado } = dados;
+  const { cpf, nome, telefone, pix_tipo, cnpj_mei, bonus_d0, email, role, pre_aprovado, unidade, tipo } = dados;
   await pool.query(`
-    INSERT INTO motoristas (cpf, nome, telefone, pix_tipo, cnpj_mei, bonus_d0, email, role, pre_aprovado)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    INSERT INTO motoristas (cpf, nome, telefone, pix_tipo, cnpj_mei, bonus_d0, email, role, pre_aprovado, unidade, tipo)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     ON CONFLICT (cpf) DO UPDATE SET
       nome = EXCLUDED.nome,
       telefone = EXCLUDED.telefone,
@@ -181,18 +187,20 @@ export async function criarMotorista(dados) {
       bonus_d0 = EXCLUDED.bonus_d0,
       email = COALESCE(EXCLUDED.email, motoristas.email),
       role = COALESCE(EXCLUDED.role, motoristas.role),
-      pre_aprovado = EXCLUDED.pre_aprovado
-  `, [cpf, nome, telefone || null, pix_tipo || 'CPF', cnpj_mei || null, bonus_d0 ?? 0, email || null, role || 'motorista', pre_aprovado ?? false]);
-  return { cpf, nome, telefone, pix_tipo, cnpj_mei, bonus_d0, email, role, pre_aprovado };
+      pre_aprovado = EXCLUDED.pre_aprovado,
+      unidade = EXCLUDED.unidade,
+      tipo = EXCLUDED.tipo
+  `, [cpf, nome, telefone || null, pix_tipo || 'CPF', cnpj_mei || null, bonus_d0 ?? 0, email || null, role || 'motorista', pre_aprovado ?? false, unidade || null, tipo || 'funcionario']);
+  return { cpf, nome, telefone, pix_tipo, cnpj_mei, bonus_d0, email, role, pre_aprovado, unidade, tipo };
 }
 
 export async function atualizarMotorista(cpf, dados) {
-  const { nome, telefone, pix_tipo, cnpj_mei, bonus_d0, email, role, pre_aprovado } = dados;
+  const { nome, telefone, pix_tipo, cnpj_mei, bonus_d0, email, role, pre_aprovado, unidade, tipo } = dados;
   const result = await pool.query(`
     UPDATE motoristas
-    SET nome = $1, telefone = $2, pix_tipo = $3, cnpj_mei = $4, bonus_d0 = $5, email = $6, role = $7, pre_aprovado = $8
-    WHERE cpf = $9
-  `, [nome, telefone || null, pix_tipo || 'CPF', cnpj_mei || null, bonus_d0 ?? 0, email || null, role || 'motorista', pre_aprovado ?? false, cpf]);
+    SET nome = $1, telefone = $2, pix_tipo = $3, cnpj_mei = $4, bonus_d0 = $5, email = $6, role = $7, pre_aprovado = $8, unidade = $9, tipo = $10
+    WHERE cpf = $11
+  `, [nome, telefone || null, pix_tipo || 'CPF', cnpj_mei || null, bonus_d0 ?? 0, email || null, role || 'motorista', pre_aprovado ?? false, unidade || null, tipo || 'funcionario', cpf]);
   return result.rowCount > 0;
 }
 
@@ -221,7 +229,7 @@ export async function getCidadesSemPreco(inicio, fim) {
       LIMIT 1
     ) pc ON true
     WHERE pc.cidade IS NULL
-      AND UPPER(c.ocorrencia) = 'MERCADORIA ENTREGUE'
+      AND EXISTS (SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%')
       AND ($1::date IS NULL OR c.ocorrencia_data >= $1::date)
       AND ($2::date IS NULL OR c.ocorrencia_data <= $2::date)
     ORDER BY c.cidade_entrega, c.ocorrencia_data DESC
@@ -257,11 +265,36 @@ export async function getCtrcsParados() {
       COUNT(*) FILTER (WHERE (CURRENT_DATE - data_emissao) BETWEEN 8 AND 15)::int AS de_8_a_15,
       COUNT(*) FILTER (WHERE (CURRENT_DATE - data_emissao) BETWEEN 16 AND 30)::int AS de_16_a_30,
       COUNT(*) FILTER (WHERE (CURRENT_DATE - data_emissao) > 30)::int AS mais_30
-    FROM ssw_ctrcs
-    WHERE (UPPER(ocorrencia) NOT IN ('MERCADORIA ENTREGUE', 'MERCADORIA DEVOLVIDA AO REMETENTE', 'CTRC BAIXADO/CANCELADO'))
-       OR ocorrencia IS NULL
+    FROM ssw_ctrcs c
+    WHERE NOT EXISTS (
+      SELECT 1 FROM ocorrencia_catalogo oc
+      WHERE oc.finalizadora = true
+        AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+    )
     GROUP BY cidade_entrega
     ORDER BY total DESC
+  `);
+  return result.rows;
+}
+
+export async function getCtrcsParadosDetalhado() {
+  const result = await pool.query(`
+    SELECT
+      v.numero_nota_fiscal AS nf,
+      c.ctrc,
+      c.data_emissao,
+      v.previsao_entrega,
+      v.data_ultima_ocorrencia,
+      c.ocorrencia,
+      c.cidade_entrega
+    FROM ssw_ctrcs c
+    LEFT JOIN ssw_455 v ON REPLACE(c.ctrc, ' ', '') = v.ctrc_normalizado
+    WHERE NOT EXISTS (
+      SELECT 1 FROM ocorrencia_catalogo oc
+      WHERE oc.finalizadora = true
+        AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+    )
+    ORDER BY c.data_emissao ASC
   `);
   return result.rows;
 }

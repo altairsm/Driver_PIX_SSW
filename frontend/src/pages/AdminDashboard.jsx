@@ -1,8 +1,13 @@
 import { useState, useEffect } from 'react';
-import { getEficienciaMotoristas, getAppUsageMotoristas, getCtrcsParados } from '../services/api';
+import { getEficienciaMotoristas, getAppUsageMotoristas, getCtrcsParados, getCtrcsParadosDetalhado } from '../services/api';
+import * as XLSX from 'xlsx';
 import Topbar from '../components/Topbar';
 
 export default function AdminDashboard() {
+  const defaultInicio = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const defaultFim = new Date().toISOString().slice(0, 10);
+
+  const [filtro, setFiltro] = useState({ inicio: defaultInicio, fim: defaultFim, tipo: '' });
   const [eficiencia, setEficiencia] = useState([]);
   const [appUsage, setAppUsage] = useState([]);
   const [ctrcsParados, setCtrcsParados] = useState([]);
@@ -10,25 +15,84 @@ export default function AdminDashboard() {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('eficiencia');
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const [ef, app, parados] = await Promise.all([
-          getEficienciaMotoristas(),
-          getAppUsageMotoristas(),
-          getCtrcsParados(),
-        ]);
-        setEficiencia(ef);
-        setAppUsage(app);
-        setCtrcsParados(parados);
-      } catch (e) {
-        setError('Erro ao carregar dados do dashboard');
-      } finally {
-        setLoading(false);
-      }
-    };
-    init();
-  }, []);
+  const carregar = async (f) => {
+    setLoading(true);
+    setError('');
+    try {
+      const fInicio = f?.inicio || null;
+      const fFim = f?.fim || null;
+      const fTipo = f?.tipo || null;
+      const [ef, app, parados] = await Promise.all([
+        getEficienciaMotoristas(fInicio, fFim, fTipo),
+        getAppUsageMotoristas(fInicio, fFim, fTipo),
+        getCtrcsParados(),
+      ]);
+      setEficiencia(ef);
+      setAppUsage(app);
+      setCtrcsParados(parados);
+    } catch {
+      setError('Erro ao carregar dados do dashboard');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { carregar(filtro); }, []);
+
+  const handleFiltrar = (e) => {
+    e.preventDefault();
+    carregar(filtro);
+  };
+
+  const tipoLabel = (tipo) => {
+    const labels = { funcionario: 'Funcionario', agregado: 'Agregado' };
+    return labels[tipo] || tipo || '—';
+  };
+
+  const tipoBadgeStyle = (tipo) => ({
+    display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: '0.68rem', fontWeight: 600,
+    background: tipo === 'agregado' ? '#ff9f40' : '#0d6efd',
+    color: '#fff',
+  });
+
+  const [exportando, setExportando] = useState(false);
+
+  const handleExportarExcel = async () => {
+    setExportando(true);
+    try {
+      const dados = await getCtrcsParadosDetalhado();
+      const fmtDate = (v) => {
+        if (!v) return '';
+        const d = new Date(v);
+        if (isNaN(d.getTime())) return '';
+        const dd = String(d.getUTCDate()).padStart(2, '0');
+        const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const yyyy = d.getUTCFullYear();
+        return `${dd}/${mm}/${yyyy}`;
+      };
+      const rows = dados.map(r => ({
+        'Nota Fiscal': r.nf || '',
+        'CTRC': r.ctrc || '',
+        'Data Emissao': fmtDate(r.data_emissao),
+        'Previsao de Entrega': fmtDate(r.previsao_entrega),
+        'Data Ultima Ocorrencia': fmtDate(r.data_ultima_ocorrencia),
+        'Ocorrencia Atual': r.ocorrencia || '',
+        'Cidade': r.cidade_entrega || '',
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = [
+        { wch: 15 }, { wch: 18 }, { wch: 14 },
+        { wch: 18 }, { wch: 18 }, { wch: 35 }, { wch: 25 },
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'CTRCs Parados');
+      XLSX.writeFile(wb, 'ctrcs_parados.xlsx');
+    } catch {
+      alert('Erro ao exportar dados');
+    } finally {
+      setExportando(false);
+    }
+  };
 
   const totalParados = ctrcsParados.reduce((s, c) => s + c.total, 0);
   const totalAte3 = ctrcsParados.reduce((s, c) => s + c.ate_3_dias, 0);
@@ -37,7 +101,7 @@ export default function AdminDashboard() {
   const total16a30 = ctrcsParados.reduce((s, c) => s + c.de_16_a_30, 0);
   const totalMais30 = ctrcsParados.reduce((s, c) => s + c.mais_30, 0);
 
-  if (loading) {
+  if (loading && eficiencia.length === 0) {
     return (
       <div style={s.container}>
         <Topbar user={JSON.parse(localStorage.getItem('user') || '{}')} />
@@ -50,10 +114,35 @@ export default function AdminDashboard() {
     <div style={s.container}>
       <Topbar user={JSON.parse(localStorage.getItem('user') || '{}')} />
       <div style={s.content}>
-        <h2 style={s.title}>Dashboard de Desempenho</h2>
-        <div style={s.sub}>Visão geral dos motoristas — últimos 30 dias</div>
+        <h2 style={s.title}>Operacional</h2>
+        <div style={s.sub}>Visao geral dos motoristas</div>
 
         {error && <div style={s.error}>{error}</div>}
+
+        <form onSubmit={handleFiltrar} style={s.filterBar}>
+          <div style={s.filterGroup}>
+            <label style={s.filterLabel}>Inicio</label>
+            <input type="date" style={s.filterInput} value={filtro.inicio}
+              onChange={(e) => setFiltro({ ...filtro, inicio: e.target.value })} />
+          </div>
+          <div style={s.filterGroup}>
+            <label style={s.filterLabel}>Fim</label>
+            <input type="date" style={s.filterInput} value={filtro.fim}
+              onChange={(e) => setFiltro({ ...filtro, fim: e.target.value })} />
+          </div>
+          <div style={s.filterGroup}>
+            <label style={s.filterLabel}>Tipo</label>
+            <select style={s.filterInput} value={filtro.tipo}
+              onChange={(e) => setFiltro({ ...filtro, tipo: e.target.value })}>
+              <option value="">Todos</option>
+              <option value="funcionario">Funcionario</option>
+              <option value="agregado">Agregado</option>
+            </select>
+          </div>
+          <button type="submit" style={s.filterBtn} disabled={loading}>
+            {loading ? 'Carregando...' : 'Filtrar'}
+          </button>
+        </form>
 
         <div style={s.tabBar}>
           {[
@@ -79,9 +168,10 @@ export default function AdminDashboard() {
                     <tr>
                       <th style={s.th}>Motorista</th>
                       <th style={s.th}>CPF</th>
+                      <th style={s.th}>Tipo</th>
                       <th style={s.th}>Entregas</th>
                       <th style={s.th}>Total</th>
-                      <th style={{ ...s.th, minWidth: 200 }}>Eficiência</th>
+                      <th style={{ ...s.th, minWidth: 200 }}>Eficiencia</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -92,6 +182,7 @@ export default function AdminDashboard() {
                         <tr key={i}>
                           <td style={s.td}>{e.nome}</td>
                           <td style={s.td}>{e.cpf}</td>
+                          <td style={s.td}><span style={tipoBadgeStyle(e.tipo)}>{tipoLabel(e.tipo)}</span></td>
                           <td style={s.td}>{e.entregas}</td>
                           <td style={s.td}>{e.total}</td>
                           <td style={s.td}>
@@ -122,6 +213,7 @@ export default function AdminDashboard() {
                     <tr>
                       <th style={s.th}>Motorista</th>
                       <th style={s.th}>CPF</th>
+                      <th style={s.th}>Tipo</th>
                       <th style={s.th}>APP</th>
                       <th style={s.th}>BASE</th>
                       <th style={s.th}>Sem Origem</th>
@@ -136,6 +228,7 @@ export default function AdminDashboard() {
                         <tr key={i}>
                           <td style={s.td}>{a.nome}</td>
                           <td style={s.td}>{a.cpf}</td>
+                          <td style={s.td}><span style={tipoBadgeStyle(a.tipo)}>{tipoLabel(a.tipo)}</span></td>
                           <td style={{ ...s.td, color: '#3de8a0' }}>{a.app}</td>
                           <td style={{ ...s.td, color: '#ff9f40' }}>{a.base}</td>
                           <td style={{ ...s.td, color: '#6b7280' }}>{a.sem_origem}</td>
@@ -159,8 +252,19 @@ export default function AdminDashboard() {
 
         {activeTab === 'aging' && (
           <div style={s.section}>
-            <div style={s.sectionTitle}>CTRCs Parados — Aging de Entregas</div>
-            <div style={s.sectionSub}>CTRCs com ocorrência diferente de "MERCADORIA ENTREGUE", agrupados por cidade</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <div style={s.sectionTitle}>CTRCs Parados — Aging de Entregas</div>
+                <div style={s.sectionSub}>CTRCs com ocorrência diferente de "MERCADORIA ENTREGUE", agrupados por cidade</div>
+              </div>
+              <button
+                style={{ ...s.exportBtn, opacity: exportando ? 0.6 : 1 }}
+                onClick={handleExportarExcel}
+                disabled={exportando || ctrcsParados.length === 0}
+              >
+                {exportando ? 'Exportando...' : 'Exportar Excel'}
+              </button>
+            </div>
 
             <div style={s.agingCards}>
               <div style={{ ...s.agingCard, borderBottomColor: '#3de8a0' }}>
@@ -243,10 +347,15 @@ const s = {
   container: { minHeight: '100vh', background: '#0d0f14', color: '#e8eaf0', fontFamily: "'IBM Plex Sans', sans-serif" },
   content: { maxWidth: 1200, margin: '0 auto', padding: '32px 24px' },
   title: { fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.8rem', letterSpacing: '2px', color: '#f0c040', marginBottom: 4 },
-  sub: { color: '#6b7280', fontSize: '0.85rem', marginBottom: 24 },
+  sub: { color: '#6b7280', fontSize: '0.85rem', marginBottom: 20 },
   error: { background: '#2a1a1a', border: '1px solid #ff5a5a', color: '#ff5a5a', padding: '10px 16px', borderRadius: 4, marginBottom: 20 },
   loading: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16, color: '#6b7280' },
   spinner: { width: 36, height: 36, border: '3px solid #2a2f3e', borderTopColor: '#f0c040', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
+  filterBar: { display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 24, background: '#161920', border: '1px solid #2a2f3e', borderRadius: 8, padding: '16px 20px' },
+  filterGroup: { display: 'flex', flexDirection: 'column', gap: 4 },
+  filterLabel: { fontSize: '0.65rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '1px' },
+  filterInput: { background: '#1e2230', border: '1px solid #2a2f3e', color: '#e8eaf0', padding: '8px 12px', borderRadius: 4, fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.82rem', minWidth: 150 },
+  filterBtn: { background: '#f0c040', color: '#0d0f14', border: 'none', padding: '9px 24px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', fontFamily: "'IBM Plex Mono', monospace", marginBottom: 1 },
   tabBar: { display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' },
   tabBtn: { background: '#1e2230', border: '1px solid #2a2f3e', color: '#6b7280', padding: '10px 20px', borderRadius: 4, cursor: 'pointer', fontSize: '0.85rem', fontFamily: "'IBM Plex Mono', monospace", transition: 'all .15s' },
   tabBtnActive: { background: '#1e2230', borderColor: '#f0c040', color: '#f0c040' },
@@ -265,4 +374,5 @@ const s = {
   agingLbl: { fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '1px' },
   agingVal: { fontSize: '1.4rem', fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace" },
   empty: { textAlign: 'center', color: '#6b7280', padding: 40, fontSize: '0.9rem' },
+  exportBtn: { background: '#198754', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', fontFamily: "'IBM Plex Mono', monospace", transition: 'all .15s', whiteSpace: 'nowrap' },
 };

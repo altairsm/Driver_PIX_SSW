@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getMotoristas, createMotorista, updateMotorista, deleteMotorista, sendMotoristaPassword } from '../services/api';
+import { getMotoristas, createMotorista, updateMotorista, deleteMotorista, sendMotoristaPassword, getUnidades } from '../services/api';
 import Topbar from '../components/Topbar';
 
 export default function AdminMotoristas() {
@@ -13,6 +13,7 @@ export default function AdminMotoristas() {
   const [form, setForm] = useState({ cpf: '', nome: '', telefone: '', pix_tipo: 'CPF', cnpj_mei: '', bonus_d0: 0, email: '', role: 'motorista', pre_aprovado: false });
   const [salvando, setSalvando] = useState(false);
   const [enviandoSenha, setEnviandoSenha] = useState(null);
+  const [unidades, setUnidades] = useState([]);
 
   const carregar = async () => {
     setLoading(true);
@@ -22,10 +23,11 @@ export default function AdminMotoristas() {
   };
 
   useEffect(() => { carregar(); }, []);
+  useEffect(() => { getUnidades().then(setUnidades).catch(() => {}); }, []);
 
   const abrirNovo = () => {
     setEditando(null);
-    setForm({ cpf: '', nome: '', telefone: '', pix_tipo: 'CPF', cnpj_mei: '', bonus_d0: 0, email: '', role: 'motorista', pre_aprovado: false });
+    setForm({ cpf: '', nome: '', telefone: '', pix_tipo: 'CPF', cnpj_mei: '', bonus_d0: 0, email: '', role: 'motorista', pre_aprovado: false, unidade: '', tipo: 'funcionario' });
     setError('');
     setModalAberto(true);
   };
@@ -42,6 +44,8 @@ export default function AdminMotoristas() {
       email: m.email || '',
       role: m.role || 'motorista',
       pre_aprovado: m.pre_aprovado || false,
+      unidade: m.unidade || '',
+      tipo: m.tipo || 'funcionario',
     });
     setError('');
     setModalAberto(true);
@@ -108,6 +112,17 @@ export default function AdminMotoristas() {
     color: '#fff',
   });
 
+  const tipoLabel = (tipo) => {
+    const labels = { funcionario: 'Funcionário', agregado: 'Agregado' };
+    return labels[tipo] || tipo || 'Funcionário';
+  };
+
+  const tipoBadgeStyle = (tipo) => ({
+    display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: '0.68rem', fontWeight: 600,
+    background: tipo === 'agregado' ? '#ff9f40' : '#0d6efd',
+    color: '#fff',
+  });
+
   return (
     <div style={s.container}>
       <Topbar user={{ nome: 'Admin' }} />
@@ -126,8 +141,10 @@ export default function AdminMotoristas() {
                   <thead><tr>
                     <th style={s.th}>CPF</th>
                     <th style={s.th}>Nome</th>
+                    <th style={s.th}>Tipo</th>
                     <th style={s.th}>E-mail</th>
                     <th style={s.th}>Perfil</th>
+                    <th style={s.th}>Unidade</th>
                     <th style={s.th}>Adiantamento</th>
                     <th style={s.th}>Telefone</th>
                     <th style={s.th}>Bônus D0</th>
@@ -138,8 +155,10 @@ export default function AdminMotoristas() {
                       <tr key={m.cpf}>
                         <td style={s.td}>{m.cpf}</td>
                         <td style={s.td}>{m.nome}</td>
+                        <td style={s.td}><span style={tipoBadgeStyle(m.tipo)}>{tipoLabel(m.tipo)}</span></td>
                         <td style={s.td}>{m.email || '—'}</td>
                         <td style={s.td}><span style={roleBadgeStyle(m.role)}>{roleLabel(m.role)}</span></td>
+                        <td style={s.td}>{m.unidade || '—'}</td>
                         <td style={s.td}>
                           {m.pre_aprovado ? (
                             <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: '0.68rem', fontWeight: 600, background: '#1a3a2a', color: '#3de8a0' }}>PRÉ-APROVADO</span>
@@ -195,12 +214,26 @@ export default function AdminMotoristas() {
                     onChange={handleChange} placeholder="email@exemplo.com.br" />
                 </div>
                 <div style={s.field}>
+                  <label style={s.label}>Tipo</label>
+                  <select style={s.select} name="tipo" value={form.tipo} onChange={handleChange}>
+                    <option value="funcionario">Funcionário</option>
+                    <option value="agregado">Agregado</option>
+                  </select>
+                </div>
+                <div style={s.field}>
                   <label style={s.label}>Perfil de Acesso</label>
                   <select style={s.select} name="role" value={form.role} onChange={handleChange}>
                     <option value="motorista">Motorista</option>
                     <option value="admin">Admin</option>
                     <option value="operador">Operador</option>
                     <option value="consulta">Consulta</option>
+                  </select>
+                </div>
+                <div style={s.field}>
+                  <label style={s.label}>Unidade (para operador/consulta)</label>
+                  <select style={s.select} name="unidade" value={form.unidade} onChange={handleChange}>
+                    <option value="">Todas (admin)</option>
+                    {unidades.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
                 <div style={s.field}>

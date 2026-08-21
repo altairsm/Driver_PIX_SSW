@@ -1,18 +1,22 @@
 import { useState, useRef } from 'react';
-import { uploadSswCsv } from '../services/api';
+import { uploadSswCsv, uploadSsw455 } from '../services/api';
 import Topbar from '../components/Topbar';
 
 export default function AdminSswUpload() {
   const [file036, setFile036] = useState(null);
   const [file031, setFile031] = useState(null);
+  const [file455, setFile455] = useState(null);
   const [result036, setResult036] = useState(null);
   const [result031, setResult031] = useState(null);
+  const [result455, setResult455] = useState(null);
   const [loading, setLoading] = useState('');
   const [error, setError] = useState('');
   const [preview036, setPreview036] = useState(null);
   const [preview031, setPreview031] = useState(null);
+  const [preview455, setPreview455] = useState(null);
   const input036Ref = useRef(null);
   const input031Ref = useRef(null);
+  const input455Ref = useRef(null);
 
   const handleFile = async (e, tipo) => {
     const selected = e.target.files[0];
@@ -20,9 +24,12 @@ export default function AdminSswUpload() {
     if (tipo === '036') {
       setFile036(selected);
       setResult036(null);
-    } else {
+    } else if (tipo === '031') {
       setFile031(selected);
       setResult031(null);
+    } else {
+      setFile455(selected);
+      setResult455(null);
     }
     setError('');
 
@@ -33,28 +40,39 @@ export default function AdminSswUpload() {
       const cols = lines[1] ? lines[1].split(';').map(c => c.trim()) : [];
       const preview = { total_linhas: text.split('\n').length, colunas: cols, amostra: lines.slice(2, 5).map(l => l.split(';')) };
       if (tipo === '036') setPreview036(preview);
-      else setPreview031(preview);
+      else if (tipo === '031') setPreview031(preview);
+      else setPreview455(preview);
     };
     reader.readAsText(selected.slice(0, 50000));
   };
 
   const handleUpload = async (tipo) => {
-    const file = tipo === '036' ? file036 : file031;
+    const file = tipo === '036' ? file036 : tipo === '031' ? file031 : file455;
     if (!file) return;
     setLoading(tipo);
     setError('');
     try {
-      const data = await uploadSswCsv(file, tipo);
+      let data;
+      if (tipo === '455') {
+        data = await uploadSsw455(file);
+      } else {
+        data = await uploadSswCsv(file, tipo);
+      }
       if (tipo === '036') {
         setResult036(data);
         setFile036(null);
         setPreview036(null);
         if (input036Ref.current) input036Ref.current.value = '';
-      } else {
+      } else if (tipo === '031') {
         setResult031(data);
         setFile031(null);
         setPreview031(null);
         if (input031Ref.current) input031Ref.current.value = '';
+      } else {
+        setResult455(data);
+        setFile455(null);
+        setPreview455(null);
+        if (input455Ref.current) input455Ref.current.value = '';
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Erro ao importar arquivo');
@@ -143,6 +161,45 @@ export default function AdminSswUpload() {
                 <div style={styles.resultDetails}>
                   <span>{result031.total_lidos} linhas</span>
                   <span>{result031.importados} ocorrências importadas</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={styles.card}>
+          <div style={styles.cardHeader}>SSW 455 — CT-e's Expedidos e Recebidos (Unidade Receptora)</div>
+          <div style={styles.cardBody}>
+            <p style={styles.desc}>Identifica a unidade responsável pela entrega. Cruzamento automático com CTRCs existentes. Inclui dados do pagador do frete.</p>
+            <label style={styles.uploadZone}>
+              <input ref={input455Ref} type="file" accept=".csv" onChange={(e) => handleFile(e, '455')} style={{ display: 'none' }} />
+              <div style={styles.uploadPlaceholder}>
+                {file455 ? <span style={{ color: '#3de8a0' }}>{file455.name}</span> : 'Selecionar CSV 455'}
+              </div>
+            </label>
+
+            {preview455 && !result455 && (
+              <div style={styles.preview}>
+                <div style={styles.previewTitle}>Preview — {preview455.total_linhas} linhas</div>
+                <div style={styles.colList}>
+                  {preview455.colunas.slice(0, 10).map((col, i) => (
+                    <span key={i} style={styles.colTag}>{col}</span>
+                  ))}
+                  {preview455.colunas.length > 10 && <span style={styles.colTag}>+{preview455.colunas.length - 10}</span>}
+                </div>
+                <button onClick={() => handleUpload('455')} disabled={loading === '455'} style={styles.importBtn}>
+                  {loading === '455' ? 'Importando...' : 'Importar SSW 455'}
+                </button>
+              </div>
+            )}
+
+            {result455 && (
+              <div style={styles.resultCard}>
+                <div style={styles.resultTitle}>✓ Importado</div>
+                <div style={styles.resultDetails}>
+                  <span>{result455.total_lidos} linhas</span>
+                  <span>{result455.importados} CT-e's importados</span>
+                  <span>{result455.atualizados_ctrcs} CTRCs atualizados com unidade</span>
                 </div>
               </div>
             )}

@@ -7,7 +7,8 @@ const GRUPOS = [
     nome: 'Desempenho',
     icon: '📊',
     items: [
-      { label: 'Dashboard', path: '/admin/dashboard', roles: ['admin', 'operador', 'consulta'] },
+      { label: 'Operacional', path: '/admin/operacional', roles: ['admin', 'operador', 'consulta'] },
+      { label: 'Gestão', path: '/admin/gestao', roles: ['admin', 'operador', 'consulta'] },
     ],
   },
   {
@@ -15,8 +16,7 @@ const GRUPOS = [
     icon: '🚚',
     items: [
       { label: 'Upload SSW', path: '/admin/upload', roles: ['admin', 'operador', 'consulta'] },
-      { label: 'Precos Cidades', path: '/admin/precos-cidades', roles: ['admin', 'consulta'] },
-      { label: 'Cidades s/ Preco', path: '/admin/cidades-sem-preco', roles: ['admin', 'operador', 'consulta'] },
+      { label: 'Ocorrencias', path: '/admin/ocorrencias', roles: ['admin', 'operador', 'consulta'] },
     ],
   },
   {
@@ -26,6 +26,9 @@ const GRUPOS = [
       { label: 'Pagamentos', path: '/admin/pagamentos', roles: ['admin', 'consulta'] },
       { label: 'Adiantamentos', path: '/admin/solicitacoes-pagamento', roles: ['admin', 'operador', 'consulta'] },
       { label: 'Taxas', path: '/admin/taxas-adiantamento', roles: ['admin', 'operador', 'consulta'] },
+      { label: 'Pagadores', path: '/admin/pagadores', roles: ['admin', 'operador', 'consulta'] },
+      { label: 'Precos Cidades', path: '/admin/precos-cidades', roles: ['admin', 'consulta'] },
+      { label: 'Cidades s/ Preco', path: '/admin/cidades-sem-preco', roles: ['admin', 'operador', 'consulta'] },
     ],
   },
   {
