@@ -74,6 +74,15 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+function RoleRoute({ children, allowedRoles }) {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const role = user.role || 'admin';
+  if (allowedRoles && !allowedRoles.includes(role)) {
+    return <Navigate to="/admin/operacional" replace />;
+  }
+  return <ProtectedRoute>{children}</ProtectedRoute>;
+}
+
 function App() {
   useEffect(() => {
     initNotifications().catch(err => console.error('Erro ao inicializar notificações:', err));
@@ -85,19 +94,19 @@ function App() {
       <Route path="/driver" element={<ProtectedRoute><DriverDashboard /></ProtectedRoute>} />
       <Route path="/driver/regras-pagamento" element={<ProtectedRoute><DriverRegrasPagamento /></ProtectedRoute>} />
       <Route path="/driver/meus-dados" element={<ProtectedRoute><MeusDados /></ProtectedRoute>} />
-      <Route path="/admin/pagamentos" element={<ProtectedRoute><AdminPagamentos /></ProtectedRoute>} />
-      <Route path="/admin/upload" element={<ProtectedRoute><AdminSswUpload /></ProtectedRoute>} />
-      <Route path="/admin/motoristas" element={<ProtectedRoute><AdminMotoristas /></ProtectedRoute>} />
-      <Route path="/admin/solicitacoes-pagamento" element={<ProtectedRoute><AdminSolicitacoesPagamento /></ProtectedRoute>} />
-      <Route path="/admin/configuracoes" element={<ProtectedRoute><AdminConfiguracoes /></ProtectedRoute>} />
-      <Route path="/admin/taxas-adiantamento" element={<ProtectedRoute><AdminTaxasAdiantamento /></ProtectedRoute>} />
-      <Route path="/admin/precos-cidades" element={<ProtectedRoute><AdminSswPrecos /></ProtectedRoute>} />
-      <Route path="/admin/cidades-sem-preco" element={<ProtectedRoute><AdminCidadesSemPreco /></ProtectedRoute>} />
-      <Route path="/admin/pagadores" element={<ProtectedRoute><AdminPagadores /></ProtectedRoute>} />
-      <Route path="/admin/ocorrencias" element={<ProtectedRoute><AdminOcorrencias /></ProtectedRoute>} />
-      <Route path="/admin/gestao" element={<ProtectedRoute><AdminGestao /></ProtectedRoute>} />
-      <Route path="/admin/operacional" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-      <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+      <Route path="/admin/pagamentos" element={<RoleRoute allowedRoles={['admin']}><AdminPagamentos /></RoleRoute>} />
+      <Route path="/admin/upload" element={<RoleRoute allowedRoles={['admin', 'operador']}><AdminSswUpload /></RoleRoute>} />
+      <Route path="/admin/motoristas" element={<RoleRoute allowedRoles={['admin']}><AdminMotoristas /></RoleRoute>} />
+      <Route path="/admin/solicitacoes-pagamento" element={<RoleRoute allowedRoles={['admin']}><AdminSolicitacoesPagamento /></RoleRoute>} />
+      <Route path="/admin/configuracoes" element={<RoleRoute allowedRoles={['admin']}><AdminConfiguracoes /></RoleRoute>} />
+      <Route path="/admin/taxas-adiantamento" element={<RoleRoute allowedRoles={['admin']}><AdminTaxasAdiantamento /></RoleRoute>} />
+      <Route path="/admin/precos-cidades" element={<RoleRoute allowedRoles={['admin']}><AdminSswPrecos /></RoleRoute>} />
+      <Route path="/admin/cidades-sem-preco" element={<RoleRoute allowedRoles={['admin']}><AdminCidadesSemPreco /></RoleRoute>} />
+      <Route path="/admin/pagadores" element={<RoleRoute allowedRoles={['admin']}><AdminPagadores /></RoleRoute>} />
+      <Route path="/admin/ocorrencias" element={<RoleRoute allowedRoles={['admin', 'operador']}><AdminOcorrencias /></RoleRoute>} />
+      <Route path="/admin/gestao" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta']}><AdminGestao /></RoleRoute>} />
+      <Route path="/admin/operacional" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta']}><AdminDashboard /></RoleRoute>} />
+      <Route path="/admin/dashboard" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta']}><AdminDashboard /></RoleRoute>} />
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
