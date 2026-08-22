@@ -23,7 +23,7 @@ services:
       context: ./backend
       args:
         COMMIT_HASH: ${COMMIT_HASH:-unknown}
-        VERSION: ${VERSION:-v3.2.0}
+        VERSION: ${VERSION:-v3.4.0}
     container_name: driver-pey-backend
     ports:
       - "3001:3001"

@@ -4,18 +4,14 @@ import Topbar from '../components/Topbar';
 
 export default function AdminSswUpload() {
   const [file036, setFile036] = useState(null);
-  const [file031, setFile031] = useState(null);
   const [file455, setFile455] = useState(null);
   const [result036, setResult036] = useState(null);
-  const [result031, setResult031] = useState(null);
   const [result455, setResult455] = useState(null);
   const [loading, setLoading] = useState('');
   const [error, setError] = useState('');
   const [preview036, setPreview036] = useState(null);
-  const [preview031, setPreview031] = useState(null);
   const [preview455, setPreview455] = useState(null);
   const input036Ref = useRef(null);
-  const input031Ref = useRef(null);
   const input455Ref = useRef(null);
 
   const handleFile = async (e, tipo) => {
@@ -24,9 +20,6 @@ export default function AdminSswUpload() {
     if (tipo === '036') {
       setFile036(selected);
       setResult036(null);
-    } else if (tipo === '031') {
-      setFile031(selected);
-      setResult031(null);
     } else {
       setFile455(selected);
       setResult455(null);
@@ -40,14 +33,13 @@ export default function AdminSswUpload() {
       const cols = lines[1] ? lines[1].split(';').map(c => c.trim()) : [];
       const preview = { total_linhas: text.split('\n').length, colunas: cols, amostra: lines.slice(2, 5).map(l => l.split(';')) };
       if (tipo === '036') setPreview036(preview);
-      else if (tipo === '031') setPreview031(preview);
       else setPreview455(preview);
     };
     reader.readAsText(selected.slice(0, 50000));
   };
 
   const handleUpload = async (tipo) => {
-    const file = tipo === '036' ? file036 : tipo === '031' ? file031 : file455;
+    const file = tipo === '036' ? file036 : file455;
     if (!file) return;
     setLoading(tipo);
     setError('');
@@ -63,11 +55,6 @@ export default function AdminSswUpload() {
         setFile036(null);
         setPreview036(null);
         if (input036Ref.current) input036Ref.current.value = '';
-      } else if (tipo === '031') {
-        setResult031(data);
-        setFile031(null);
-        setPreview031(null);
-        if (input031Ref.current) input031Ref.current.value = '';
       } else {
         setResult455(data);
         setFile455(null);
@@ -123,44 +110,6 @@ export default function AdminSswUpload() {
                   <span>{result036.motoristas} motoristas</span>
                   <span>{result036.romaneios} romaneios</span>
                   <span>{result036.ctrcs} CTRCs</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div style={styles.card}>
-          <div style={styles.cardHeader}>SSW 031 — Ocorrências CTRC</div>
-          <div style={styles.cardBody}>
-            <p style={styles.desc}>Importa ocorrências do 031 em tabela独立ente. Normaliza CTRC e detecta origem (APP/BASE) automaticamente.</p>
-            <label style={styles.uploadZone}>
-              <input ref={input031Ref} type="file" accept=".csv" onChange={(e) => handleFile(e, '031')} style={{ display: 'none' }} />
-              <div style={styles.uploadPlaceholder}>
-                {file031 ? <span style={{ color: '#3de8a0' }}>{file031.name}</span> : 'Selecionar CSV 031'}
-              </div>
-            </label>
-
-            {preview031 && !result031 && (
-              <div style={styles.preview}>
-                <div style={styles.previewTitle}>Preview — {preview031.total_linhas} linhas</div>
-                <div style={styles.colList}>
-                  {preview031.colunas.slice(0, 10).map((col, i) => (
-                    <span key={i} style={styles.colTag}>{col}</span>
-                  ))}
-                  {preview031.colunas.length > 10 && <span style={styles.colTag}>+{preview031.colunas.length - 10}</span>}
-                </div>
-                <button onClick={() => handleUpload('031')} disabled={loading === '031'} style={styles.importBtn}>
-                  {loading === '031' ? 'Importando...' : 'Importar SSW 031'}
-                </button>
-              </div>
-            )}
-
-            {result031 && (
-              <div style={styles.resultCard}>
-                <div style={styles.resultTitle}>✓ Importado</div>
-                <div style={styles.resultDetails}>
-                  <span>{result031.total_lidos} linhas</span>
-                  <span>{result031.importados} ocorrências importadas</span>
                 </div>
               </div>
             )}

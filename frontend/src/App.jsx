@@ -15,6 +15,7 @@ import AdminSswPrecos from './pages/AdminSswPrecos'
 import AdminCidadesSemPreco from './pages/AdminCidadesSemPreco'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminPagadores from './pages/AdminPagadores'
+import AdminUnidades from './pages/AdminUnidades'
 import AdminGestao from './pages/AdminGestao'
 import AdminOcorrencias from './pages/AdminOcorrencias'
 
@@ -103,6 +104,7 @@ function App() {
       <Route path="/admin/precos-cidades" element={<RoleRoute allowedRoles={['admin']}><AdminSswPrecos /></RoleRoute>} />
       <Route path="/admin/cidades-sem-preco" element={<RoleRoute allowedRoles={['admin']}><AdminCidadesSemPreco /></RoleRoute>} />
       <Route path="/admin/pagadores" element={<RoleRoute allowedRoles={['admin']}><AdminPagadores /></RoleRoute>} />
+      <Route path="/admin/unidades" element={<RoleRoute allowedRoles={['admin']}><AdminUnidades /></RoleRoute>} />
       <Route path="/admin/ocorrencias" element={<RoleRoute allowedRoles={['admin', 'operador']}><AdminOcorrencias /></RoleRoute>} />
       <Route path="/admin/gestao" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta']}><AdminGestao /></RoleRoute>} />
       <Route path="/admin/operacional" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta']}><AdminDashboard /></RoleRoute>} />

@@ -315,14 +315,20 @@ export async function confirmarRegras(cpf) {
 export async function getAppUsage(cpf, inicio, fim) {
   const result = await pool.query(`
     SELECT
-      COALESCE(o.origem_ocorrencia, 'SEM ORIGEM') AS origem,
+      COALESCE(
+        CASE
+          WHEN UPPER(v.ocorrencia) LIKE '%SSWMOBILE%' THEN 'APP'
+          WHEN UPPER(v.ocorrencia) LIKE '%OPC 038%' THEN 'BASE'
+        END,
+        'SEM ORIGEM'
+      ) AS origem,
       COUNT(*)::int AS quantidade
-    FROM ssw_ocorrencias o
-    JOIN ssw_ctrcs c ON c.ctrc = o.ctrc_normalizado
+    FROM ssw_455 v
+    JOIN ssw_ctrcs c ON c.ctrc = v.ctrc_normalizado
     JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
     WHERE r.motorista_cpf = $1
       AND c.ocorrencia_data BETWEEN $2::date AND $3::date
-    GROUP BY o.origem_ocorrencia
+    GROUP BY origem
     ORDER BY origem
   `, [cpf, inicio, fim]);
 
@@ -373,7 +379,7 @@ export async function getBonusD0(cpf, inicio, fim) {
   };
 }
 
-export async function getEficienciaTodos(inicio, fim, tipo) {
+export async function getEficienciaTodos(inicio, fim, tipo, unidade) {
   const params = [];
   const conditions = [];
 
@@ -383,6 +389,7 @@ export async function getEficienciaTodos(inicio, fim, tipo) {
   if (inicio) { params.push(inicio); }
   if (fim) { params.push(fim); }
   if (tipo) { params.push(tipo); conditions.push(`m.tipo = $${params.length}`); }
+  if (unidade) { params.push(unidade); conditions.push(`c.unidade_receptora = $${params.length}`); }
 
   const whereTipo = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
   const dateFilter = (col) => {
@@ -414,13 +421,14 @@ export async function getEficienciaTodos(inicio, fim, tipo) {
   return result.rows;
 }
 
-export async function getAppUsageTodos(inicio, fim, tipo) {
+export async function getAppUsageTodos(inicio, fim, tipo, unidade) {
   const params = [];
   const conditions = [];
 
   if (inicio) { params.push(inicio); }
   if (fim) { params.push(fim); }
   if (tipo) { params.push(tipo); conditions.push(`m.tipo = $${params.length}`); }
+  if (unidade) { params.push(unidade); conditions.push(`v.unidade_receptora = $${params.length}`); }
 
   const whereTipo = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
   const dateFilter = (col) => {
@@ -435,13 +443,13 @@ export async function getAppUsageTodos(inicio, fim, tipo) {
       r.motorista_cpf AS cpf,
       r.motorista_nome AS nome,
       m.tipo,
-      COUNT(*) FILTER (WHERE o.origem_ocorrencia = 'APP')::int AS app,
-      COUNT(*) FILTER (WHERE o.origem_ocorrencia = 'BASE')::int AS base,
-      COUNT(*) FILTER (WHERE o.origem_ocorrencia IS NULL OR o.origem_ocorrencia = '')::int AS sem_origem,
+      COUNT(*) FILTER (WHERE UPPER(v.ocorrencia) LIKE '%SSWMOBILE%')::int AS app,
+      COUNT(*) FILTER (WHERE UPPER(v.ocorrencia) LIKE '%OPC 038%')::int AS base,
+      COUNT(*) FILTER (WHERE UPPER(v.ocorrencia) NOT LIKE '%SSWMOBILE%' AND UPPER(v.ocorrencia) NOT LIKE '%OPC 038%')::int AS sem_origem,
       COUNT(*)::int AS total,
-      ROUND(COUNT(*) FILTER (WHERE o.origem_ocorrencia = 'APP') * 100.0 / NULLIF(COUNT(*), 0), 1)::numeric(5,1) AS pct_app
-    FROM ssw_ocorrencias o
-    JOIN ssw_ctrcs c ON c.ctrc = o.ctrc_normalizado
+      ROUND(COUNT(*) FILTER (WHERE UPPER(v.ocorrencia) LIKE '%SSWMOBILE%') * 100.0 / NULLIF(COUNT(*), 0), 1)::numeric(5,1) AS pct_app
+    FROM ssw_455 v
+    JOIN ssw_ctrcs c ON c.ctrc = v.ctrc_normalizado
     JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
     JOIN motoristas m ON m.cpf = r.motorista_cpf
     WHERE ${dateFilter('c.ocorrencia_data')} ${whereTipo}

@@ -244,31 +244,37 @@ export async function getCtrcsSemPreco(inicio, fim) {
 }
 
 // Admin Dashboard
-export async function getEficienciaMotoristas(inicio, fim, tipo) {
+export async function getEficienciaMotoristas(inicio, fim, tipo, unidade) {
   const params = {};
   if (inicio) params.inicio = inicio;
   if (fim) params.fim = fim;
   if (tipo) params.tipo = tipo;
+  if (unidade) params.unidade = unidade;
   const { data } = await api.get('/admin/eficiencia-motoristas', { params });
   return data;
 }
 
-export async function getAppUsageMotoristas(inicio, fim, tipo) {
+export async function getAppUsageMotoristas(inicio, fim, tipo, unidade) {
   const params = {};
   if (inicio) params.inicio = inicio;
   if (fim) params.fim = fim;
   if (tipo) params.tipo = tipo;
+  if (unidade) params.unidade = unidade;
   const { data } = await api.get('/admin/app-usage-motoristas', { params });
   return data;
 }
 
-export async function getCtrcsParados() {
-  const { data } = await api.get('/admin/ctrcs-parados');
+export async function getCtrcsParados(unidade) {
+  const params = {};
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/ctrcs-parados', { params });
   return data;
 }
 
-export async function getCtrcsParadosDetalhado() {
-  const { data } = await api.get('/admin/ctrcs-parados-detalhado');
+export async function getCtrcsParadosDetalhado(unidade) {
+  const params = {};
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/ctrcs-parados-detalhado', { params });
   return data;
 }
 
@@ -301,6 +307,26 @@ export async function getResumoPagador(cnpj, inicio, fim) {
 // Unidades
 export async function getUnidades() {
   const { data } = await api.get('/admin/unidades');
+  return data.filter(u => u.ativo !== false).map(u => u.sigla);
+}
+
+export async function getUnidadesAll() {
+  const { data } = await api.get('/admin/unidades');
+  return data;
+}
+
+export async function createUnidade(dados) {
+  const { data } = await api.post('/admin/unidades', dados);
+  return data;
+}
+
+export async function updateUnidade(id, dados) {
+  const { data } = await api.put(`/admin/unidades/${id}`, dados);
+  return data;
+}
+
+export async function deleteUnidade(id) {
+  const { data } = await api.delete(`/admin/unidades/${id}`);
   return data;
 }
 

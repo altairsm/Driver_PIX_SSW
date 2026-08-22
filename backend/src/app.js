@@ -14,6 +14,7 @@ import taxasAdiantamentoRoutes from './routes/taxasAdiantamento.js';
 import solicitacoesRoutes from './routes/solicitacoes.js';
 import pagadoresRoutes from './routes/pagadores.js';
 import ocorrenciasRoutes from './routes/ocorrencias.js';
+import unidadesRoutes from './routes/unidades.js';
 import { authenticateToken, requireAdmin, requireRole } from './middleware/auth.js';
 
 const app = express();
@@ -56,6 +57,7 @@ app.use('/taxas-adiantamento', authenticateToken, taxasAdiantamentoRoutes);
 app.use('/admin', authenticateToken, requireRole('admin', 'operador', 'consulta'), solicitacoesRoutes);
 app.use('/admin', authenticateToken, requireRole('admin', 'operador', 'consulta'), pagadoresRoutes);
 app.use('/admin', authenticateToken, requireRole('admin', 'operador', 'consulta'), ocorrenciasRoutes);
+app.use('/admin', authenticateToken, requireRole('admin', 'operador', 'consulta'), unidadesRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);

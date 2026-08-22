@@ -255,7 +255,14 @@ export async function getCidadesSemPreco(inicio, fim) {
   };
 }
 
-export async function getCtrcsParados() {
+export async function getCtrcsParados(unidade) {
+  const params = [];
+  const conditions = [];
+
+  if (unidade) { params.push(unidade); conditions.push(`c.unidade_receptora = $${params.length}`); }
+
+  const where = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
+
   const result = await pool.query(`
     SELECT
       cidade_entrega,
@@ -271,13 +278,21 @@ export async function getCtrcsParados() {
       WHERE oc.finalizadora = true
         AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%'
     )
+    ${where}
     GROUP BY cidade_entrega
     ORDER BY total DESC
-  `);
+  `, params);
   return result.rows;
 }
 
-export async function getCtrcsParadosDetalhado() {
+export async function getCtrcsParadosDetalhado(unidade) {
+  const params = [];
+  const conditions = [];
+
+  if (unidade) { params.push(unidade); conditions.push(`c.unidade_receptora = $${params.length}`); }
+
+  const where = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
+
   const result = await pool.query(`
     SELECT
       v.numero_nota_fiscal AS nf,
@@ -294,7 +309,8 @@ export async function getCtrcsParadosDetalhado() {
       WHERE oc.finalizadora = true
         AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%'
     )
+    ${where}
     ORDER BY c.data_emissao ASC
-  `);
+  `, params);
   return result.rows;
 }

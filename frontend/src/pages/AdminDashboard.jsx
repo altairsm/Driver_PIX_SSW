@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getEficienciaMotoristas, getAppUsageMotoristas, getCtrcsParados, getCtrcsParadosDetalhado } from '../services/api';
+import api from '../services/api';
 import * as XLSX from 'xlsx';
 import Topbar from '../components/Topbar';
 
@@ -7,7 +8,8 @@ export default function AdminDashboard() {
   const defaultInicio = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
   const defaultFim = new Date().toISOString().slice(0, 10);
 
-  const [filtro, setFiltro] = useState({ inicio: defaultInicio, fim: defaultFim, tipo: '' });
+  const [filtro, setFiltro] = useState({ inicio: defaultInicio, fim: defaultFim, tipo: '', unidade: '' });
+  const [unidades, setUnidades] = useState([]);
   const [eficiencia, setEficiencia] = useState([]);
   const [appUsage, setAppUsage] = useState([]);
   const [ctrcsParados, setCtrcsParados] = useState([]);
@@ -22,10 +24,11 @@ export default function AdminDashboard() {
       const fInicio = f?.inicio || null;
       const fFim = f?.fim || null;
       const fTipo = f?.tipo || null;
+      const fUnidade = f?.unidade || null;
       const [ef, app, parados] = await Promise.all([
-        getEficienciaMotoristas(fInicio, fFim, fTipo),
-        getAppUsageMotoristas(fInicio, fFim, fTipo),
-        getCtrcsParados(),
+        getEficienciaMotoristas(fInicio, fFim, fTipo, fUnidade),
+        getAppUsageMotoristas(fInicio, fFim, fTipo, fUnidade),
+        getCtrcsParados(fUnidade),
       ]);
       setEficiencia(ef);
       setAppUsage(app);
@@ -37,7 +40,10 @@ export default function AdminDashboard() {
     }
   };
 
-  useEffect(() => { carregar(filtro); }, []);
+  useEffect(() => {
+    carregar(filtro);
+    api.get('/admin/unidades').then(({ data }) => setUnidades(data.filter(u => u.ativo !== false).map(u => u.sigla))).catch(() => {});
+  }, []);
 
   const handleFiltrar = (e) => {
     e.preventDefault();
@@ -60,7 +66,7 @@ export default function AdminDashboard() {
   const handleExportarExcel = async () => {
     setExportando(true);
     try {
-      const dados = await getCtrcsParadosDetalhado();
+      const dados = await getCtrcsParadosDetalhado(filtro.unidade || null);
       const fmtDate = (v) => {
         if (!v) return '';
         const d = new Date(v);
@@ -137,6 +143,14 @@ export default function AdminDashboard() {
               <option value="">Todos</option>
               <option value="funcionario">Funcionario</option>
               <option value="agregado">Agregado</option>
+            </select>
+          </div>
+          <div style={s.filterGroup}>
+            <label style={s.filterLabel}>Unidade</label>
+            <select style={s.filterInput} value={filtro.unidade}
+              onChange={(e) => setFiltro({ ...filtro, unidade: e.target.value })}>
+              <option value="">Todas</option>
+              {unidades.map(u => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
           <button type="submit" style={s.filterBtn} disabled={loading}>

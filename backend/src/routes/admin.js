@@ -183,8 +183,8 @@ router.get('/ctrcs-sem-preco', async (req, res) => {
 
 router.get('/eficiencia-motoristas', async (req, res) => {
   try {
-    const { inicio, fim, tipo } = req.query;
-    const data = await getEficienciaTodos(inicio || null, fim || null, tipo || null);
+    const { inicio, fim, tipo, unidade } = req.query;
+    const data = await getEficienciaTodos(inicio || null, fim || null, tipo || null, unidade || null);
     res.json(data);
   } catch (err) {
     console.error('Erro ao buscar eficiência dos motoristas:', err);
@@ -194,8 +194,8 @@ router.get('/eficiencia-motoristas', async (req, res) => {
 
 router.get('/app-usage-motoristas', async (req, res) => {
   try {
-    const { inicio, fim, tipo } = req.query;
-    const data = await getAppUsageTodos(inicio || null, fim || null, tipo || null);
+    const { inicio, fim, tipo, unidade } = req.query;
+    const data = await getAppUsageTodos(inicio || null, fim || null, tipo || null, unidade || null);
     res.json(data);
   } catch (err) {
     console.error('Erro ao buscar uso do app:', err);
@@ -205,7 +205,8 @@ router.get('/app-usage-motoristas', async (req, res) => {
 
 router.get('/ctrcs-parados', async (req, res) => {
   try {
-    const data = await getCtrcsParados();
+    const { unidade } = req.query;
+    const data = await getCtrcsParados(unidade || null);
     res.json(data);
   } catch (err) {
     console.error('Erro ao buscar CTRCs parados:', err);
@@ -215,26 +216,12 @@ router.get('/ctrcs-parados', async (req, res) => {
 
 router.get('/ctrcs-parados-detalhado', async (req, res) => {
   try {
-    const data = await getCtrcsParadosDetalhado();
+    const { unidade } = req.query;
+    const data = await getCtrcsParadosDetalhado(unidade || null);
     res.json(data);
   } catch (err) {
     console.error('Erro ao buscar CTRCs parados detalhado:', err);
     res.status(500).json({ error: 'Erro ao buscar CTRCs parados detalhado' });
-  }
-});
-
-router.get('/unidades', async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT DISTINCT unidade_receptora AS unidade
-      FROM ssw_455
-      WHERE unidade_receptora IS NOT NULL AND unidade_receptora != ''
-      ORDER BY unidade_receptora
-    `);
-    res.json(rows.map(r => r.unidade));
-  } catch (err) {
-    console.error('Erro ao buscar unidades:', err);
-    res.status(500).json({ error: 'Erro ao buscar unidades' });
   }
 });
 
@@ -271,6 +258,7 @@ router.get('/gestao', async (req, res) => {
         JOIN pagadores p ON p.cnpj = v.cnpj_pagador
         LEFT JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'
         ${where}
+        AND (oc.id IS NULL OR oc.finalizadora != true)
         GROUP BY 1, 2
       ) sub
       ORDER BY sub.cliente,
@@ -289,7 +277,31 @@ router.get('/gestao', async (req, res) => {
       JOIN pagadores p ON p.cnpj = v.cnpj_pagador
       LEFT JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'
       ${where}
+      AND (oc.id IS NULL OR oc.finalizadora != true)
     `, params);
+
+    const whereHoje = unidade ? `WHERE p.ativo = true AND v.previsao_entrega IS NOT NULL AND v.unidade_receptora = $1` : `WHERE p.ativo = true AND v.previsao_entrega IS NOT NULL`;
+    const paramsHoje = unidade ? [unidade] : [];
+
+    const { rows: realizadasRows } = await pool.query(`
+      SELECT COALESCE(p.nome_simplificado, v.cliente_pagador) AS cliente,
+             COUNT(*)::int AS realizadas_hoje
+      FROM ssw_455 v
+      JOIN pagadores p ON p.cnpj = v.cnpj_pagador
+      JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+      ${whereHoje}
+        AND oc.finalizadora = true
+        AND oc.codigo = '1'
+        AND v.data_ultima_ocorrencia = CURRENT_DATE
+      GROUP BY 1
+    `, paramsHoje);
+
+    const realizadasMap = {};
+    realizadasRows.forEach(r => { realizadasMap[r.cliente] = r.realizadas_hoje; });
+
+    dados.forEach(row => { row.realizadas_hoje = realizadasMap[row.cliente] || 0; });
+
+    totais.realizadas_hoje = realizadasRows.reduce((s, r) => s + r.realizadas_hoje, 0);
 
     res.json({ dados, totais: totais || {} });
   } catch (err) {

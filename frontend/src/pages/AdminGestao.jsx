@@ -60,7 +60,11 @@ export default function AdminGestao() {
     agrupado[row.cliente][row.status_prazo] = row;
   });
 
-  const clientes = Object.keys(agrupado).sort();
+  const clientes = Object.keys(agrupado).sort((a, b) => {
+    const totalA = Object.values(agrupado[a]).reduce((s, r) => s + (r.em_rota || 0) + (r.na_filial || 0) + (r.insucesso || 0) + (r.devolucao || 0) + (r.agendado || 0) + (r.transferencia || 0), 0);
+    const totalB = Object.values(agrupado[b]).reduce((s, r) => s + (r.em_rota || 0) + (r.na_filial || 0) + (r.insucesso || 0) + (r.devolucao || 0) + (r.agendado || 0) + (r.transferencia || 0), 0);
+    return totalB - totalA;
+  });
 
   const sumField = (arr, field) => arr.reduce((acc, r) => acc + (r[field] || 0), 0);
 
@@ -73,6 +77,7 @@ export default function AdminGestao() {
       devolucao: sumField(rows, 'devolucao'),
       agendado: sumField(rows, 'agendado'),
       transferencia: sumField(rows, 'transferencia'),
+      realizadas_hoje: sumField(rows, 'realizadas_hoje'),
     };
   };
 
@@ -85,6 +90,7 @@ export default function AdminGestao() {
       devolucao: sumField(rows, 'devolucao'),
       agendado: sumField(rows, 'agendado'),
       transferencia: sumField(rows, 'transferencia'),
+      realizadas_hoje: sumField(rows, 'realizadas_hoje'),
     };
   };
 
@@ -148,17 +154,21 @@ export default function AdminGestao() {
             <div style={s.card}>
               <div style={s.cardHeader}>
                 <h5 style={s.cardTitle}>Total Geral — {clientes.length} clientes</h5>
+                <span style={{ display: 'flex', gap: 16, fontWeight: 700, fontSize: '0.9rem', fontFamily: "'IBM Plex Mono', monospace" }}>
+                  <span style={{ color: '#3de8a0' }}>Realizadas hoje: {fmt(totalGeral().realizadas_hoje)}</span>
+                  <span style={{ color: '#f0c040' }}>Pendentes: {fmt(totalGeral().em_rota + totalGeral().na_filial + totalGeral().insucesso + totalGeral().devolucao + totalGeral().agendado + totalGeral().transferencia)}</span>
+                </span>
               </div>
               <div style={s.tableWrap}>
                 <table style={s.table}>
-                  <thead><tr>
-                    <th style={s.th}>Cliente</th>
-                    <th style={s.th}>Em rota</th>
-                    <th style={s.th}>Na filial</th>
-                    <th style={s.th}>Insucesso</th>
-                    <th style={s.th}>Devolucao</th>
-                    <th style={s.th}>Agendado</th>
-                    <th style={s.th}>Transferencia</th>
+                  <thead><tr style={s.thRow}>
+                    <th style={{ ...s.th, color: '#f0c040' }}>Cliente</th>
+                    <th style={{ ...s.th, color: '#60a5fa' }}>Em rota</th>
+                    <th style={{ ...s.th, color: '#f0c040' }}>Na filial</th>
+                    <th style={{ ...s.th, color: '#ff5a5a' }}>Insucesso</th>
+                    <th style={{ ...s.th, color: '#a855f7' }}>Devolucao</th>
+                    <th style={{ ...s.th, color: '#3de8a0' }}>Agendado</th>
+                    <th style={{ ...s.th, color: '#06b6d4' }}>Transferencia</th>
                   </tr></thead>
                   <tbody>
                     {renderRow('TOTAL GERAL', totalGeral(), true)}
@@ -174,18 +184,21 @@ export default function AdminGestao() {
                 <div key={nome} style={s.card}>
                   <div style={s.cardHeader}>
                     <h5 style={s.cardTitle}>{nome}</h5>
-                    <span style={s.badge}>{fmt(totalAll)} entregas</span>
+                    <span style={{ display: 'flex', gap: 16, fontWeight: 700, fontSize: '0.85rem', fontFamily: "'IBM Plex Mono', monospace" }}>
+                      <span style={{ color: '#3de8a0' }}>Realizadas hoje: {fmt(t.realizadas_hoje)}</span>
+                      <span style={{ color: '#f0c040' }}>Pendentes: {fmt(totalAll)}</span>
+                    </span>
                   </div>
                   <div style={s.tableWrap}>
                     <table style={s.table}>
-                      <thead><tr>
-                        <th style={s.th}>Status Prazo</th>
-                        <th style={s.th}>Em rota</th>
-                        <th style={s.th}>Na filial</th>
-                        <th style={s.th}>Insucesso</th>
-                        <th style={s.th}>Devolucao</th>
-                        <th style={s.th}>Agendado</th>
-                        <th style={s.th}>Transferencia</th>
+                      <thead><tr style={s.thRow}>
+                        <th style={{ ...s.th, color: '#f0c040' }}>Status Prazo</th>
+                        <th style={{ ...s.th, color: '#60a5fa' }}>Em rota</th>
+                        <th style={{ ...s.th, color: '#f0c040' }}>Na filial</th>
+                        <th style={{ ...s.th, color: '#ff5a5a' }}>Insucesso</th>
+                        <th style={{ ...s.th, color: '#a855f7' }}>Devolucao</th>
+                        <th style={{ ...s.th, color: '#3de8a0' }}>Agendado</th>
+                        <th style={{ ...s.th, color: '#06b6d4' }}>Transferencia</th>
                       </tr></thead>
                       <tbody>
                         {STATUS_ORDER.map((st) => {
@@ -245,7 +258,8 @@ const s = {
   badge: { background: '#2a2f3e', color: '#e8eaf0', padding: '3px 10px', borderRadius: 12, fontSize: '0.7rem', fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace" },
   tableWrap: { overflowX: 'auto' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' },
-  th: { padding: '10px 14px', textAlign: 'left', fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '1px', borderBottom: '1px solid #2a2f3e', background: '#1e2230', fontFamily: "'IBM Plex Mono', monospace" },
+  th: { padding: '12px 14px', textAlign: 'left', fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '1.5px', borderBottom: '2px solid #3a3f4e', background: '#1a1f2e', fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 },
+  thRow: { background: '#1a1f2e', borderBottom: '2px solid #3a3f4e' },
   td: { padding: '10px 14px', fontSize: '0.8rem', borderBottom: '1px solid #2a2f3e', color: '#e8eaf0', fontFamily: "'IBM Plex Mono', monospace" },
   loadingBox: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' },
   spinner: { width: 32, height: 32, border: '3px solid #2a2f3e', borderTopColor: '#f0c040', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },

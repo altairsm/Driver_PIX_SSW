@@ -487,7 +487,7 @@ export async function runMigrations() {
         (NULL, 'FALTA DE VOLUME', false, 'Na filial'),
         (NULL, 'DEVOLUCAO AUTORIZADA', false, 'Devolução'),
         (NULL, 'MERCAD REPASSADA P/ PROX TRANSPORTADORA', false, 'Transferência')
-      ON CONFLICT (descricao) DO UPDATE SET resumo = EXCLUDED.resumo, codigo = COALESCE(ocorrencia_catalogo.codigo, EXCLUDED.codigo)
+      ON CONFLICT (descricao) DO NOTHING
     `);
 
     await pool.query(`UPDATE ocorrencia_catalogo SET resumo = 'Em rota' WHERE descricao = 'SAIDA PARA ENTREGA' AND resumo IS NULL`);
@@ -501,6 +501,28 @@ export async function runMigrations() {
     await pool.query(`UPDATE ocorrencia_catalogo SET resumo = 'Devolução' WHERE descricao = 'DEVOLUCAO AUTORIZADA' AND resumo IS NULL`);
     await pool.query(`UPDATE ocorrencia_catalogo SET resumo = 'Transferência' WHERE descricao = 'MERCAD REPASSADA P/ PROX TRANSPORTADORA' AND resumo IS NULL`);
     console.log('  ocorrencia_catalogo resumo data synced');
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS unidades (
+      id SERIAL PRIMARY KEY,
+      nome VARCHAR(100) NOT NULL,
+      sigla VARCHAR(10) NOT NULL UNIQUE,
+      ativo BOOLEAN DEFAULT true,
+      criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`);
+    console.log('  -> unidades');
+
+    await pool.query(`
+      INSERT INTO unidades (sigla, nome)
+      SELECT DISTINCT TRIM(unidade_rept.unidade), TRIM(unidade_rept.unidade)
+      FROM (
+        SELECT DISTINCT unidade_receptora AS unidade
+        FROM ssw_455
+        WHERE unidade_receptora IS NOT NULL AND TRIM(unidade_receptora) != ''
+      ) unidade_rept
+      ON CONFLICT (sigla) DO NOTHING
+    `);
+    console.log('  -> unidades seed from ssw_455');
 
   } catch (err) {
     console.error('Migration error:', err);
