@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
+  timeout: 15000,
 });
 
 api.interceptors.request.use((config) => {
@@ -15,10 +16,13 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401 || err.response?.status === 403) {
-      if (err.config?.url?.includes('fcm-token')) {
-        return Promise.reject(err);
-      }
+    if (err.config?.url?.includes('fcm-token')) {
+      return Promise.reject(err);
+    }
+    const status = err.response?.status;
+    const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
+    const isNetwork = !err.response && err.request;
+    if (status === 401 || status === 403 || isTimeout || isNetwork) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       if (window.location.pathname !== '/login') {

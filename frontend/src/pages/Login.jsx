@@ -10,6 +10,27 @@ export default function Login() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      })
+        .then(r => { if (r.ok) return r.json(); throw new Error(); })
+        .then(d => {
+          const role = d.user?.role || 'motorista';
+          navigate(role === 'motorista' ? '/driver' : '/admin/operacional', { replace: true });
+        })
+        .catch(() => {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+        })
+        .finally(() => clearTimeout(timer));
+      return () => { clearTimeout(timer); controller.abort(); };
+    }
+
     try {
       const saved = sessionStorage.getItem('auth_error');
       if (saved) {
@@ -18,7 +39,7 @@ export default function Login() {
         sessionStorage.removeItem('auth_error');
       }
     } catch {}
-  }, []);
+  }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

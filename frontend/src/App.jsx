@@ -38,7 +38,7 @@ function ProtectedRoute({ children }) {
     if (!token) { setValid(false); return; }
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
+    const timer = setTimeout(() => controller.abort(), 5000);
 
     fetch('/api/auth/me', {
       headers: { Authorization: `Bearer ${token}` },
