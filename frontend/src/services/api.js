@@ -16,7 +16,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.config?.url?.includes('fcm-token')) {
+    if (err.config?.url?.includes('fcm-token') || err.config?.url?.includes('/upload/')) {
       return Promise.reject(err);
     }
     const status = err.response?.status;
@@ -350,6 +350,7 @@ export async function uploadSsw455(file) {
   formData.append('file', file);
   const { data } = await api.post('/upload/ssw-455', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000,
   });
   return data;
 }
