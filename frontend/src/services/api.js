@@ -212,6 +212,7 @@ export async function uploadSswCsv(file, tipo) {
   formData.append('file', file);
   const { data } = await api.post(`/upload/ssw-${tipo}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 300000,
   });
   return data;
 }
@@ -350,7 +351,7 @@ export async function uploadSsw455(file) {
   formData.append('file', file);
   const { data } = await api.post('/upload/ssw-455', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 120000,
+    timeout: 300000,
   });
   return data;
 }

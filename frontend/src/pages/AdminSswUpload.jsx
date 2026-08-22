@@ -62,7 +62,9 @@ export default function AdminSswUpload() {
         if (input455Ref.current) input455Ref.current.value = '';
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Erro ao importar arquivo');
+      const msg = err.response?.data?.error || err.message || 'Erro ao importar arquivo';
+      const status = err.response?.status ? ` [${err.response.status}]` : '';
+      setError(`${status} ${msg}`);
     } finally {
       setLoading('');
     }
