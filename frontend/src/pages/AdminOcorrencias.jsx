@@ -2,6 +2,17 @@ import { useState, useEffect } from 'react';
 import { getOcorrencias, createOcorrencia, updateOcorrencia, deleteOcorrencia } from '../services/api';
 import Topbar from '../components/Topbar';
 
+const RESUMOS = ['Em rota', 'Na filial', 'Insucesso', 'Devolução', 'Agendado', 'Transferência'];
+
+const RESUMO_COLORS = {
+  'Em rota': { bg: '#1a2a3a', color: '#60a5fa' },
+  'Na filial': { bg: '#2a2a1a', color: '#f0c040' },
+  'Insucesso': { bg: '#3a1a1a', color: '#ff5a5a' },
+  'Devolução': { bg: '#2a1a3a', color: '#a855f7' },
+  'Agendado': { bg: '#1a3a2a', color: '#3de8a0' },
+  'Transferência': { bg: '#1a2a3a', color: '#06b6d4' },
+};
+
 export default function AdminOcorrencias() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isAdmin = user.role === 'admin';
