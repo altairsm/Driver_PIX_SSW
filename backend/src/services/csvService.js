@@ -6,8 +6,15 @@ function parseBrDate(str) {
   if (!str || typeof str !== 'string') return null;
   const s = str.trim();
   if (!s) return null;
-  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  return m ? `${m[3]}-${m[2]}-${m[1]}` : s;
+  const m4 = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m4) return `${m4[3]}-${m4[2]}-${m4[1]}`;
+  const m2 = s.match(/^(\d{2})\/(\d{2})\/(\d{2})$/);
+  if (m2) {
+    const yy = parseInt(m2[3]);
+    const year = yy < 50 ? 2000 + yy : 1900 + yy;
+    return `${year}-${m2[2]}-${m2[1]}`;
+  }
+  return s;
 }
 
 export function parseCSV(filePath, fromLine = 1) {
