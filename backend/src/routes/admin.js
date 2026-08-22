@@ -253,26 +253,28 @@ router.get('/gestao', async (req, res) => {
     const where = `WHERE ${conditions.join(' AND ')}`;
 
     const { rows: dados } = await pool.query(`
-      SELECT
-        COALESCE(p.nome_simplificado, v.cliente_pagador) AS cliente,
-        CASE
-          WHEN v.previsao_entrega < CURRENT_DATE THEN 'Vencido'
-          WHEN v.previsao_entrega = CURRENT_DATE THEN 'Vence hoje'
-          ELSE 'A Vencer'
-        END AS status_prazo,
-        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Em rota')::int AS em_rota,
-        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Na filial')::int AS na_filial,
-        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Insucesso')::int AS insucesso,
-        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Devolução')::int AS devolucao,
-        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Agendado')::int AS agendado,
-        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Transferência')::int AS transferencia
-      FROM ssw_455 v
-      JOIN pagadores p ON p.cnpj = v.cnpj_pagador
-      LEFT JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'
-      ${where}
-      GROUP BY 1, 2
-      ORDER BY cliente, 
-        CASE status_prazo WHEN 'A Vencer' THEN 1 WHEN 'Vence hoje' THEN 2 WHEN 'Vencido' THEN 3 END
+      SELECT * FROM (
+        SELECT
+          COALESCE(p.nome_simplificado, v.cliente_pagador) AS cliente,
+          CASE
+            WHEN v.previsao_entrega < CURRENT_DATE THEN 'Vencido'
+            WHEN v.previsao_entrega = CURRENT_DATE THEN 'Vence hoje'
+            ELSE 'A Vencer'
+          END AS status_prazo,
+          COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Em rota')::int AS em_rota,
+          COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Na filial')::int AS na_filial,
+          COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Insucesso')::int AS insucesso,
+          COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Devolução')::int AS devolucao,
+          COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Agendado')::int AS agendado,
+          COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Transferência')::int AS transferencia
+        FROM ssw_455 v
+        JOIN pagadores p ON p.cnpj = v.cnpj_pagador
+        LEFT JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+        ${where}
+        GROUP BY 1, 2
+      ) sub
+      ORDER BY sub.cliente,
+        CASE sub.status_prazo WHEN 'A Vencer' THEN 1 WHEN 'Vence hoje' THEN 2 WHEN 'Vencido' THEN 3 END
     `, params);
 
     const { rows: [totais] } = await pool.query(`
