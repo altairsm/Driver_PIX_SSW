@@ -242,59 +242,54 @@ router.get('/gestao', async (req, res) => {
   try {
     const { inicio, fim, unidade } = req.query;
     const params = [];
-    const conditions = [];
+    const conditions = ['p.ativo = true'];
 
-    if (inicio) { params.push(inicio); conditions.push(`data_emissao >= $${params.length}::date`); }
-    if (fim) { params.push(fim); conditions.push(`data_emissao <= $${params.length}::date`); }
-    if (unidade) { params.push(unidade); conditions.push(`unidade_receptora = $${params.length}`); }
+    if (inicio) { params.push(inicio); conditions.push(`v.data_emissao >= $${params.length}::date`); }
+    if (fim) { params.push(fim); conditions.push(`v.data_emissao <= $${params.length}::date`); }
+    if (unidade) { params.push(unidade); conditions.push(`v.unidade_receptora = $${params.length}`); }
 
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    conditions.push('v.previsao_entrega IS NOT NULL');
 
-    const { rows: [resumo] } = await pool.query(`
+    const where = `WHERE ${conditions.join(' AND ')}`;
+
+    const { rows: dados } = await pool.query(`
       SELECT
-        COUNT(*)::int AS total_entregas,
-        COALESCE(SUM(valor_frete), 0)::numeric(12,2) AS frete_total,
-        COALESCE(SUM(peso_real), 0)::numeric(12,3) AS peso_total,
-        COALESCE(SUM(volumes), 0)::int AS volumes_total,
-        COUNT(DISTINCT cnpj_pagador)::int AS cnpjs_distintos,
-        COUNT(DISTINCT unidade_receptora)::int AS unidades_distintas
-      FROM ssw_455 ${where}
-    `, params);
-
-    const { rows: porPagador } = await pool.query(`
-      SELECT
-        v.cnpj_pagador,
-        COALESCE(p.razao_social, v.cliente_pagador) AS razao_social,
-        p.nome_simplificado,
-        p.ativo,
-        COUNT(*)::int AS total_entregas,
-        COALESCE(SUM(v.valor_frete), 0)::numeric(12,2) AS frete_total,
-        COALESCE(SUM(v.peso_real), 0)::numeric(12,3) AS peso_total,
-        COALESCE(SUM(v.volumes), 0)::int AS volumes_total,
-        ARRAY_AGG(DISTINCT v.unidade_receptora) FILTER (WHERE v.unidade_receptora IS NOT NULL) AS unidades
+        COALESCE(p.nome_simplificado, v.cliente_pagador) AS cliente,
+        CASE
+          WHEN v.previsao_entrega < CURRENT_DATE THEN 'Vencido'
+          WHEN v.previsao_entrega = CURRENT_DATE THEN 'Vence hoje'
+          ELSE 'A Vencer'
+        END AS status_prazo,
+        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Em rota')::int AS em_rota,
+        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Na filial')::int AS na_filial,
+        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Insucesso')::int AS insucesso,
+        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Devolução')::int AS devolucao,
+        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Agendado')::int AS agendado,
+        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Transferência')::int AS transferencia
       FROM ssw_455 v
-      LEFT JOIN pagadores p ON p.cnpj = v.cnpj_pagador
+      JOIN pagadores p ON p.cnpj = v.cnpj_pagador
+      LEFT JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'
       ${where}
-      GROUP BY v.cnpj_pagador, p.razao_social, p.nome_simplificado, p.ativo, v.cliente_pagador
-      ORDER BY frete_total DESC
+      GROUP BY cliente, status_prazo
+      ORDER BY cliente, 
+        CASE status_prazo WHEN 'A Vencer' THEN 1 WHEN 'Vence hoje' THEN 2 WHEN 'Vencido' THEN 3 END
     `, params);
 
-    const { rows: porUnidade } = await pool.query(`
+    const { rows: [totais] } = await pool.query(`
       SELECT
-        unidade_receptora,
-        COUNT(*)::int AS total_entregas,
-        COALESCE(SUM(valor_frete), 0)::numeric(12,2) AS frete_total,
-        COALESCE(SUM(peso_real), 0)::numeric(12,3) AS peso_total,
-        COALESCE(SUM(volumes), 0)::int AS volumes_total,
-        COUNT(DISTINCT cnpj_pagador)::int AS cnpjs_distintos
-      FROM ssw_455
+        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Em rota')::int AS em_rota,
+        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Na filial')::int AS na_filial,
+        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Insucesso')::int AS insucesso,
+        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Devolução')::int AS devolucao,
+        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Agendado')::int AS agendado,
+        COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Transferência')::int AS transferencia
+      FROM ssw_455 v
+      JOIN pagadores p ON p.cnpj = v.cnpj_pagador
+      LEFT JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'
       ${where}
-      ${where ? 'AND' : 'WHERE'} unidade_receptora IS NOT NULL AND unidade_receptora != ''
-      GROUP BY unidade_receptora
-      ORDER BY frete_total DESC
     `, params);
 
-    res.json({ resumo_geral: resumo || {}, por_pagador: porPagador, por_unidade: porUnidade });
+    res.json({ dados, totais: totais || {} });
   } catch (err) {
     console.error('Erro ao buscar dados da gestão:', err);
     res.status(500).json({ error: 'Erro ao buscar dados da gestão' });

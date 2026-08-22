@@ -444,28 +444,63 @@ export async function runMigrations() {
       codigo VARCHAR(10),
       descricao VARCHAR(500) NOT NULL,
       finalizadora BOOLEAN DEFAULT false,
+      resumo VARCHAR(50),
       criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE (descricao)
     )`);
     console.log('  -> ocorrencia_catalogo');
 
-    await seedIfEmpty('ocorrencia_catalogo', `
-      INSERT INTO ocorrencia_catalogo (codigo, descricao, finalizadora) VALUES
-        ('1', 'MERCADORIA ENTREGUE', true),
-        ('2', 'MERCADORIA DEVOLVIDA AO REMETENTE', true),
-        ('3', 'CTRC BAIXADO/CANCELADO', true),
-        (NULL, 'SAIDA PARA ENTREGA', false),
-        (NULL, 'ENDERECO NAO LOCALIZADO', false),
-        (NULL, 'LOCAL DE ENTREGA FECHADO/AUSENTE', false),
-        (NULL, 'ENTREGA AGENDADA', false),
-        (NULL, 'ESTORNO DE BAIXA/ENTREGA ANTERIOR', false),
-        (NULL, 'RECEBEDOR RECUSA/NAO PODE RECEBER MERCADORIA', false),
-        (NULL, 'ENTREGA PREJUDICADA PELO HORARIO', false),
-        (NULL, 'FALTA DE VOLUME', false),
-        (NULL, 'DEVOLUCAO AUTORIZADA', false),
-        (NULL, 'MERCAD REPASSADA P/ PROX TRANSPORTADORA', false)
-      ON CONFLICT (descricao) DO NOTHING
+    await pool.query(`ALTER TABLE ocorrencia_catalogo ADD COLUMN IF NOT EXISTS resumo VARCHAR(50)`);
+
+    await pool.query(`
+      INSERT INTO ocorrencia_catalogo (codigo, descricao, finalizadora, resumo) VALUES
+        ('1', 'MERCADORIA ENTREGUE', true, NULL),
+        ('2', 'MERCADORIA DEVOLVIDA AO REMETENTE', true, 'Devolução'),
+        ('3', 'CTRC BAIXADO/CANCELADO', true, NULL),
+        ('7', 'CHEGADA NO CLIENTE DESTINATARIO', false, 'Em rota'),
+        ('10', 'ENDERECO NAO LOCALIZADO', false, 'Insucesso'),
+        ('11', 'LOCAL DE ENTREGA FECHADO/AUSENTE', false, 'Insucesso'),
+        ('13', 'ENTREGA PREJUDICADA PELO HORARIO', false, 'Insucesso'),
+        ('15', 'ENTREGA AGENDADA', false, 'Agendado'),
+        ('35', 'AGUARDANDO AGENDAMENTO DO CLIENTE', false, 'Na filial'),
+        ('38', 'RECEBEDOR RECUSA/NAO PODE RECEBER MERCADORIA', false, 'Insucesso'),
+        ('52', 'FALTA NO PICKING', false, 'Na filial'),
+        ('53', 'MERCADORIA AVARIADA', false, 'Insucesso'),
+        ('54', 'EMBALAGEM AVARIADA', false, 'Na filial'),
+        ('55', 'CARGA ROUBADA', false, 'Na filial'),
+        ('60', 'VIA INTERDITADA', false, 'Insucesso'),
+        ('62', 'VIA INTERDITADA POR FATORES NATURAIS', false, 'Insucesso'),
+        ('80', 'MERCADORIA RECEBIDA PARA TRANSPORTE', false, 'Na filial'),
+        ('82', 'SAIDA DE UNIDADE', false, 'Transferência'),
+        ('84', 'CHEGADA NA UNIDADE', false, 'Na filial'),
+        ('85', 'SAIDA PARA ENTREGA', false, 'Em rota'),
+        ('86', 'ESTORNO DE BAIXA/ENTREGA ANTERIOR', false, 'Na filial'),
+        ('88', 'RESGATE DE MERCADORIA SOLICITADA PELO CLIENTE', false, 'Devolução'),
+        ('95', 'PREVISAO DE ENTREGA ALTERADA', false, 'Em rota'),
+        (NULL, 'SAIDA PARA ENTREGA', false, 'Em rota'),
+        (NULL, 'ENDERECO NAO LOCALIZADO', false, 'Insucesso'),
+        (NULL, 'LOCAL DE ENTREGA FECHADO/AUSENTE', false, 'Insucesso'),
+        (NULL, 'ENTREGA AGENDADA', false, 'Agendado'),
+        (NULL, 'ESTORNO DE BAIXA/ENTREGA ANTERIOR', false, 'Na filial'),
+        (NULL, 'RECEBEDOR RECUSA/NAO PODE RECEBER MERCADORIA', false, 'Insucesso'),
+        (NULL, 'ENTREGA PREJUDICADA PELO HORARIO', false, 'Insucesso'),
+        (NULL, 'FALTA DE VOLUME', false, 'Na filial'),
+        (NULL, 'DEVOLUCAO AUTORIZADA', false, 'Devolução'),
+        (NULL, 'MERCAD REPASSADA P/ PROX TRANSPORTADORA', false, 'Transferência')
+      ON CONFLICT (descricao) DO UPDATE SET resumo = EXCLUDED.resumo, codigo = COALESCE(ocorrencia_catalogo.codigo, EXCLUDED.codigo)
     `);
+
+    await pool.query(`UPDATE ocorrencia_catalogo SET resumo = 'Em rota' WHERE descricao = 'SAIDA PARA ENTREGA' AND resumo IS NULL`);
+    await pool.query(`UPDATE ocorrencia_catalogo SET resumo = 'Insucesso' WHERE descricao = 'ENDERECO NAO LOCALIZADO' AND resumo IS NULL`);
+    await pool.query(`UPDATE ocorrencia_catalogo SET resumo = 'Insucesso' WHERE descricao = 'LOCAL DE ENTREGA FECHADO/AUSENTE' AND resumo IS NULL`);
+    await pool.query(`UPDATE ocorrencia_catalogo SET resumo = 'Agendado' WHERE descricao = 'ENTREGA AGENDADA' AND resumo IS NULL`);
+    await pool.query(`UPDATE ocorrencia_catalogo SET resumo = 'Na filial' WHERE descricao = 'ESTORNO DE BAIXA/ENTREGA ANTERIOR' AND resumo IS NULL`);
+    await pool.query(`UPDATE ocorrencia_catalogo SET resumo = 'Insucesso' WHERE descricao = 'RECEBEDOR RECUSA/NAO PODE RECEBER MERCADORIA' AND resumo IS NULL`);
+    await pool.query(`UPDATE ocorrencia_catalogo SET resumo = 'Insucesso' WHERE descricao = 'ENTREGA PREJUDICADA PELO HORARIO' AND resumo IS NULL`);
+    await pool.query(`UPDATE ocorrencia_catalogo SET resumo = 'Na filial' WHERE descricao = 'FALTA DE VOLUME' AND resumo IS NULL`);
+    await pool.query(`UPDATE ocorrencia_catalogo SET resumo = 'Devolução' WHERE descricao = 'DEVOLUCAO AUTORIZADA' AND resumo IS NULL`);
+    await pool.query(`UPDATE ocorrencia_catalogo SET resumo = 'Transferência' WHERE descricao = 'MERCAD REPASSADA P/ PROX TRANSPORTADORA' AND resumo IS NULL`);
+    console.log('  ocorrencia_catalogo resumo data synced');
 
   } catch (err) {
     console.error('Migration error:', err);

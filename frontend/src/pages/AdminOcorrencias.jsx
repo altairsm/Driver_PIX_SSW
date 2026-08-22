@@ -10,7 +10,7 @@ export default function AdminOcorrencias() {
   const [error, setError] = useState('');
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState(null);
-  const [form, setForm] = useState({ codigo: '', descricao: '', finalizadora: false });
+  const [form, setForm] = useState({ codigo: '', descricao: '', finalizadora: false, resumo: '' });
   const [salvando, setSalvando] = useState(false);
   const [busca, setBusca] = useState('');
 
@@ -25,14 +25,14 @@ export default function AdminOcorrencias() {
 
   const abrirNovo = () => {
     setEditando(null);
-    setForm({ codigo: '', descricao: '', finalizadora: false });
+    setForm({ codigo: '', descricao: '', finalizadora: false, resumo: '' });
     setError('');
     setModalAberto(true);
   };
 
   const abrirEditar = (o) => {
     setEditando(o);
-    setForm({ codigo: o.codigo || '', descricao: o.descricao || '', finalizadora: o.finalizadora === true });
+    setForm({ codigo: o.codigo || '', descricao: o.descricao || '', finalizadora: o.finalizadora === true, resumo: o.resumo || '' });
     setError('');
     setModalAberto(true);
   };
@@ -88,11 +88,13 @@ export default function AdminOcorrencias() {
 
   const filtrados = ocorrencias.filter(o =>
     o.descricao.toLowerCase().includes(busca.toLowerCase()) ||
-    (o.codigo && o.codigo.toLowerCase().includes(busca.toLowerCase()))
+    (o.codigo && o.codigo.toLowerCase().includes(busca.toLowerCase())) ||
+    (o.resumo && o.resumo.toLowerCase().includes(busca.toLowerCase()))
   );
 
   const finalizadoras = filtrados.filter(o => o.finalizadora);
   const naoFinalizadoras = filtrados.filter(o => !o.finalizadora);
+  const comResumo = filtrados.filter(o => o.resumo);
 
   return (
     <div style={s.container}>
@@ -107,6 +109,7 @@ export default function AdminOcorrencias() {
               <span style={s.badge}>{ocorrencias.length} total</span>
               <span style={{ ...s.badge, background: '#1a3a2a', color: '#3de8a0' }}>{finalizadoras.length} finalizadoras</span>
               <span style={{ ...s.badge, background: '#3a2a1a', color: '#f0c040' }}>{naoFinalizadoras.length} em aberto</span>
+              <span style={{ ...s.badge, background: '#1a2a3a', color: '#60a5fa' }}>{comResumo.length} com resumo</span>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input
@@ -126,9 +129,8 @@ export default function AdminOcorrencias() {
                   <thead><tr>
                     <th style={s.th}>Codigo</th>
                     <th style={s.th}>Descricao</th>
+                    <th style={s.th}>Resumo</th>
                     <th style={s.th}>Tipo</th>
-                    <th style={s.th}>Usos 036</th>
-                    <th style={s.th}>Usos 455</th>
                     {isAdmin && <th style={s.th}>Acoes</th>}
                   </tr></thead>
                   <tbody>
@@ -136,6 +138,17 @@ export default function AdminOcorrencias() {
                       <tr key={o.id} style={{ opacity: o.finalizadora ? 1 : 0.7 }}>
                         <td style={s.td}>{o.codigo || '—'}</td>
                         <td style={s.td}>{o.descricao}</td>
+                        <td style={s.td}>
+                          {o.resumo ? (
+                            <span style={{
+                              background: RESUMO_COLORS[o.resumo]?.bg || '#2a2f3e',
+                              color: RESUMO_COLORS[o.resumo]?.color || '#e8eaf0',
+                              border: `1px solid ${RESUMO_COLORS[o.resumo]?.color || '#2a2f3e'}`,
+                              borderRadius: 12, padding: '3px 10px',
+                              fontSize: '0.7rem', fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace"
+                            }}>{o.resumo}</span>
+                          ) : '—'}
+                        </td>
                         <td style={s.td}>
                           <button
                             onClick={() => isAdmin && handleToggleFinalizadora(o)}
@@ -150,8 +163,6 @@ export default function AdminOcorrencias() {
                             {o.finalizadora ? 'FINALIZADORA' : 'EM ABERTO'}
                           </button>
                         </td>
-                        <td style={s.td}>{o.usos_ctrcs || 0}</td>
-                        <td style={s.td}>{o.usos_455 || 0}</td>
                         {isAdmin && (
                           <td style={{ ...s.td, whiteSpace: 'nowrap' }}>
                             <button style={s.btnSm('#ffc107', '#0d0f14')} onClick={() => abrirEditar(o)}>Editar</button>
@@ -187,6 +198,13 @@ export default function AdminOcorrencias() {
                   <label style={s.label}>Descricao</label>
                   <input style={s.input} name="descricao" value={form.descricao}
                     onChange={handleChange} required placeholder="Ex: MERCADORIA ENTREGUE" />
+                </div>
+                <div style={s.field}>
+                  <label style={s.label}>Resumo</label>
+                  <select style={s.input} name="resumo" value={form.resumo} onChange={handleChange}>
+                    <option value="">Nenhum</option>
+                    {RESUMOS.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
                 </div>
                 <div style={s.field}>
                   <label style={{ ...s.label, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>

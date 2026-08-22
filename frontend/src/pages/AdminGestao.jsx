@@ -2,26 +2,46 @@ import { useState, useEffect } from 'react';
 import { getGestao, getUnidades } from '../services/api';
 import Topbar from '../components/Topbar';
 
+const STATUS_ORDER = ['A Vencer', 'Vence hoje', 'Vencido'];
+const STATUS_COLORS = {
+  'A Vencer': { bg: '#1a2a3a', color: '#60a5fa' },
+  'Vence hoje': { bg: '#3a2a1a', color: '#f0c040' },
+  'Vencido': { bg: '#3a1a1a', color: '#ff5a5a' },
+};
+const STATUS_BG = {
+  'A Vencer': '#60a5fa',
+  'Vence hoje': '#f0c040',
+  'Vencido': '#ff5a5a',
+};
+
 export default function AdminGestao() {
-  const [dados, setDados] = useState(null);
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const [dados, setDados] = useState([]);
+  const [totais, setTotais] = useState({});
   const [unidades, setUnidades] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [filtro, setFiltro] = useState({ inicio: '', fim: '', unidade: '' });
-  const [activeTab, setActiveTab] = useState('pagador');
+  const [filtro, setFiltro] = useState({
+    inicio: new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10),
+    fim: new Date().toISOString().slice(0, 10),
+    unidade: '',
+  });
 
   const carregar = async () => {
     setLoading(true);
     setError('');
     try {
-      const [gestao, uni] = await Promise.all([
+      const [gestao, units] = await Promise.all([
         getGestao(filtro.inicio || null, filtro.fim || null, filtro.unidade || null),
         getUnidades(),
       ]);
-      setDados(gestao);
-      setUnidades(uni);
+      setDados(gestao.dados || []);
+      setTotais(gestao.totais || {});
+      setUnidades(units || []);
     } catch {
       setError('Erro ao carregar dados da gestão');
+      setDados([]);
+      setTotais({});
     } finally {
       setLoading(false);
     }
@@ -34,22 +54,70 @@ export default function AdminGestao() {
     carregar();
   };
 
+  const agrupado = {};
+  dados.forEach((row) => {
+    if (!agrupado[row.cliente]) agrupado[row.cliente] = {};
+    agrupado[row.cliente][row.status_prazo] = row;
+  });
+
+  const clientes = Object.keys(agrupado).sort();
+
+  const sumField = (arr, field) => arr.reduce((acc, r) => acc + (r[field] || 0), 0);
+
+  const totalCliente = (nome) => {
+    const rows = Object.values(agrupado[nome] || {});
+    return {
+      em_rota: sumField(rows, 'em_rota'),
+      na_filial: sumField(rows, 'na_filial'),
+      insucesso: sumField(rows, 'insucesso'),
+      devolucao: sumField(rows, 'devolucao'),
+      agendado: sumField(rows, 'agendado'),
+      transferencia: sumField(rows, 'transferencia'),
+    };
+  };
+
+  const totalGeral = () => {
+    const rows = Object.values(agrupado).flatMap(obj => Object.values(obj));
+    return {
+      em_rota: sumField(rows, 'em_rota'),
+      na_filial: sumField(rows, 'na_filial'),
+      insucesso: sumField(rows, 'insucesso'),
+      devolucao: sumField(rows, 'devolucao'),
+      agendado: sumField(rows, 'agendado'),
+      transferencia: sumField(rows, 'transferencia'),
+    };
+  };
+
   const fmt = (v) => Number(v || 0).toLocaleString('pt-BR');
-  const fmtCurrency = (v) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const fmtKg = (v) => `${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg`;
+
+  const renderRow = (label, data, bold, borderColor) => (
+    <tr key={label} style={{
+      fontWeight: bold ? 700 : 400,
+      background: bold ? '#1e2230' : 'transparent',
+      borderLeft: borderColor ? `3px solid ${borderColor}` : '3px solid transparent',
+    }}>
+      <td style={{ ...s.td, fontWeight: bold ? 700 : 400, color: bold ? '#e8eaf0' : '#9ca3af' }}>{label}</td>
+      <td style={{ ...s.td, textAlign: 'center' }}>{fmt(data.em_rota)}</td>
+      <td style={{ ...s.td, textAlign: 'center' }}>{fmt(data.na_filial)}</td>
+      <td style={{ ...s.td, textAlign: 'center' }}>{fmt(data.insucesso)}</td>
+      <td style={{ ...s.td, textAlign: 'center' }}>{fmt(data.devolucao)}</td>
+      <td style={{ ...s.td, textAlign: 'center' }}>{fmt(data.agendado)}</td>
+      <td style={{ ...s.td, textAlign: 'center' }}>{fmt(data.transferencia)}</td>
+    </tr>
+  );
 
   return (
     <div style={s.container}>
-      <Topbar user={JSON.parse(localStorage.getItem('user') || '{}')} />
+      <Topbar user={user} />
       <div style={s.content}>
-        <h2 style={s.title}>Gestão</h2>
-        <div style={s.sub}>Indicadores baseados no SSW 455 — entregas por pagador e unidade</div>
+        <h2 style={s.title}>Gestao — Prazo de Entrega</h2>
+        <div style={s.sub}>Entregas por pagador agrupadas por status de prazo e ocorrencia atual</div>
 
         {error && <div style={s.error}>{error}</div>}
 
         <form onSubmit={handleFiltrar} style={s.filterBar}>
           <div style={s.filterGroup}>
-            <label style={s.filterLabel}>Início</label>
+            <label style={s.filterLabel}>Inicio</label>
             <input type="date" style={s.filterInput} value={filtro.inicio}
               onChange={(e) => setFiltro({ ...filtro, inicio: e.target.value })} />
           </div>
@@ -73,152 +141,88 @@ export default function AdminGestao() {
 
         {loading ? (
           <div style={s.loadingBox}><div style={s.spinner}></div></div>
-        ) : dados ? (
+        ) : dados.length === 0 ? (
+          <div style={s.empty}>Nenhum dado encontrado para o periodo selecionado</div>
+        ) : (
           <>
-            <div style={s.kpiRow}>
-              <div style={{ ...s.kpiCard, borderBottomColor: '#3de8a0' }}>
-                <div style={s.kpiLabel}>Total Entregas</div>
-                <div style={{ ...s.kpiValue, color: '#3de8a0' }}>{fmt(dados.resumo_geral?.total_entregas)}</div>
+            <div style={s.card}>
+              <div style={s.cardHeader}>
+                <h5 style={s.cardTitle}>Total Geral — {clientes.length} clientes</h5>
               </div>
-              <div style={{ ...s.kpiCard, borderBottomColor: '#f0c040' }}>
-                <div style={s.kpiLabel}>Frete Total</div>
-                <div style={{ ...s.kpiValue, color: '#f0c040' }}>{fmtCurrency(dados.resumo_geral?.frete_total)}</div>
-              </div>
-              <div style={{ ...s.kpiCard, borderBottomColor: '#0d6efd' }}>
-                <div style={s.kpiLabel}>Peso Total</div>
-                <div style={{ ...s.kpiValue, color: '#0d6efd' }}>{fmtKg(dados.resumo_geral?.peso_total)}</div>
-              </div>
-              <div style={{ ...s.kpiCard, borderBottomColor: '#6b7280' }}>
-                <div style={s.kpiLabel}>Volumes</div>
-                <div style={{ ...s.kpiValue, color: '#e8eaf0' }}>{fmt(dados.resumo_geral?.volumes_total)}</div>
-              </div>
-              <div style={{ ...s.kpiCard, borderBottomColor: '#ff9f40' }}>
-                <div style={s.kpiLabel}>Pagadores</div>
-                <div style={{ ...s.kpiValue, color: '#ff9f40' }}>{fmt(dados.resumo_geral?.cnpjs_distintos)}</div>
-              </div>
-              <div style={{ ...s.kpiCard, borderBottomColor: '#a855f7' }}>
-                <div style={s.kpiLabel}>Unidades</div>
-                <div style={{ ...s.kpiValue, color: '#a855f7' }}>{fmt(dados.resumo_geral?.unidades_distintas)}</div>
+              <div style={s.tableWrap}>
+                <table style={s.table}>
+                  <thead><tr>
+                    <th style={s.th}>Cliente</th>
+                    <th style={s.th}>Em rota</th>
+                    <th style={s.th}>Na filial</th>
+                    <th style={s.th}>Insucesso</th>
+                    <th style={s.th}>Devolucao</th>
+                    <th style={s.th}>Agendado</th>
+                    <th style={s.th}>Transferencia</th>
+                  </tr></thead>
+                  <tbody>
+                    {renderRow('TOTAL GERAL', totalGeral(), true)}
+                  </tbody>
+                </table>
               </div>
             </div>
 
-            <div style={s.tabBar}>
-              <button style={{ ...s.tabBtn, ...(activeTab === 'pagador' ? s.tabBtnActive : {}) }}
-                onClick={() => setActiveTab('pagador')}>
-                Por Pagador
-              </button>
-              <button style={{ ...s.tabBtn, ...(activeTab === 'unidade' ? s.tabBtnActive : {}) }}
-                onClick={() => setActiveTab('unidade')}>
-                Por Unidade
-              </button>
-            </div>
-
-            {activeTab === 'pagador' && (
-              <div style={s.section}>
-                <div style={s.sectionTitle}>Entregas por Pagador</div>
-                {dados.por_pagador?.length === 0 ? (
-                  <div style={s.empty}>Nenhum pagador encontrado para o período.</div>
-                ) : (
+            {clientes.map((nome) => {
+              const t = totalCliente(nome);
+              const totalAll = t.em_rota + t.na_filial + t.insucesso + t.devolucao + t.agendado + t.transferencia;
+              return (
+                <div key={nome} style={s.card}>
+                  <div style={s.cardHeader}>
+                    <h5 style={s.cardTitle}>{nome}</h5>
+                    <span style={s.badge}>{fmt(totalAll)} entregas</span>
+                  </div>
                   <div style={s.tableWrap}>
                     <table style={s.table}>
-                      <thead>
-                        <tr>
-                          <th style={s.th}>Status</th>
-                          <th style={s.th}>Pagador</th>
-                          <th style={s.th}>CNPJ</th>
-                          <th style={s.th}>Entregas</th>
-                          <th style={s.th}>Frete Total</th>
-                          <th style={s.th}>Peso Total</th>
-                          <th style={s.th}>Volumes</th>
-                          <th style={s.th}>Unidades</th>
-                        </tr>
-                      </thead>
+                      <thead><tr>
+                        <th style={s.th}>Status Prazo</th>
+                        <th style={s.th}>Em rota</th>
+                        <th style={s.th}>Na filial</th>
+                        <th style={s.th}>Insucesso</th>
+                        <th style={s.th}>Devolucao</th>
+                        <th style={s.th}>Agendado</th>
+                        <th style={s.th}>Transferencia</th>
+                      </tr></thead>
                       <tbody>
-                        {dados.por_pagador.map((p, i) => (
-                          <tr key={i} style={{ opacity: p.ativo === false ? 0.45 : 1 }}>
-                            <td style={s.td}>
-                              <span style={{
-                                background: p.ativo !== false ? '#1a3a2a' : '#3a1a1a',
-                                color: p.ativo !== false ? '#3de8a0' : '#ff5a5a',
-                                border: `1px solid ${p.ativo !== false ? '#3de8a0' : '#ff5a5a'}`,
-                                borderRadius: 12, padding: '2px 8px', fontSize: '0.65rem', fontWeight: 600
-                              }}>
-                                {p.ativo !== false ? 'ATIVO' : 'INATIVO'}
-                              </span>
-                            </td>
-                            <td style={s.td}>{p.razao_social || p.nome_simplificado || '—'}</td>
-                            <td style={s.td}>{(p.cnpj_pagador || '').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')}</td>
-                            <td style={{ ...s.td, fontWeight: 600 }}>{fmt(p.total_entregas)}</td>
-                            <td style={{ ...s.td, color: '#3de8a0' }}>{fmtCurrency(p.frete_total)}</td>
-                            <td style={s.td}>{fmtKg(p.peso_total)}</td>
-                            <td style={s.td}>{fmt(p.volumes_total)}</td>
-                            <td style={s.td}>{(p.unidades || []).filter(Boolean).join(', ') || '—'}</td>
-                          </tr>
-                        ))}
+                        {STATUS_ORDER.map((st) => {
+                          const row = agrupado[nome][st];
+                          const borderColor = STATUS_BG[st];
+                          if (!row) return (
+                            <tr key={st} style={{ borderLeft: `3px solid ${borderColor}`, opacity: 0.35 }}>
+                              <td style={{ ...s.td, color: STATUS_COLORS[st]?.color || '#6b7280' }}>{st}</td>
+                              <td style={{ ...s.td, textAlign: 'center' }}>0</td>
+                              <td style={{ ...s.td, textAlign: 'center' }}>0</td>
+                              <td style={{ ...s.td, textAlign: 'center' }}>0</td>
+                              <td style={{ ...s.td, textAlign: 'center' }}>0</td>
+                              <td style={{ ...s.td, textAlign: 'center' }}>0</td>
+                              <td style={{ ...s.td, textAlign: 'center' }}>0</td>
+                            </tr>
+                          );
+                          return (
+                            <tr key={st} style={{ borderLeft: `3px solid ${borderColor}` }}>
+                              <td style={{ ...s.td, color: STATUS_COLORS[st]?.color || '#6b7280', fontWeight: 600 }}>{st}</td>
+                              <td style={{ ...s.td, textAlign: 'center' }}>{fmt(row.em_rota)}</td>
+                              <td style={{ ...s.td, textAlign: 'center' }}>{fmt(row.na_filial)}</td>
+                              <td style={{ ...s.td, textAlign: 'center' }}>{fmt(row.insucesso)}</td>
+                              <td style={{ ...s.td, textAlign: 'center' }}>{fmt(row.devolucao)}</td>
+                              <td style={{ ...s.td, textAlign: 'center' }}>{fmt(row.agendado)}</td>
+                              <td style={{ ...s.td, textAlign: 'center' }}>{fmt(row.transferencia)}</td>
+                            </tr>
+                          );
+                        })}
+                        {renderRow('Total', t, true)}
                       </tbody>
-                      <tfoot>
-                        <tr>
-                          <td colSpan={3} style={{ ...s.td, fontWeight: 600, color: '#f0c040' }}>TOTAL</td>
-                          <td style={{ ...s.td, fontWeight: 600 }}>{fmt(dados.por_pagador.reduce((s, p) => s + p.total_entregas, 0))}</td>
-                          <td style={{ ...s.td, fontWeight: 600, color: '#3de8a0' }}>{fmtCurrency(dados.por_pagador.reduce((s, p) => s + Number(p.frete_total), 0))}</td>
-                          <td style={{ ...s.td, fontWeight: 600 }}>{fmtKg(dados.por_pagador.reduce((s, p) => s + Number(p.peso_total), 0))}</td>
-                          <td style={{ ...s.td, fontWeight: 600 }}>{fmt(dados.por_pagador.reduce((s, p) => s + p.volumes_total, 0))}</td>
-                          <td style={s.td}></td>
-                        </tr>
-                      </tfoot>
                     </table>
                   </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'unidade' && (
-              <div style={s.section}>
-                <div style={s.sectionTitle}>Entregas por Unidade</div>
-                {dados.por_unidade?.length === 0 ? (
-                  <div style={s.empty}>Nenhuma unidade encontrada para o período.</div>
-                ) : (
-                  <div style={s.tableWrap}>
-                    <table style={s.table}>
-                      <thead>
-                        <tr>
-                          <th style={s.th}>Unidade</th>
-                          <th style={s.th}>Entregas</th>
-                          <th style={s.th}>Frete Total</th>
-                          <th style={s.th}>Peso Total</th>
-                          <th style={s.th}>Volumes</th>
-                          <th style={s.th}>Pagadores</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dados.por_unidade.map((u, i) => (
-                          <tr key={i}>
-                            <td style={{ ...s.td, fontWeight: 600, color: '#a855f7' }}>{u.unidade_receptora}</td>
-                            <td style={{ ...s.td, fontWeight: 600 }}>{fmt(u.total_entregas)}</td>
-                            <td style={{ ...s.td, color: '#3de8a0' }}>{fmtCurrency(u.frete_total)}</td>
-                            <td style={s.td}>{fmtKg(u.peso_total)}</td>
-                            <td style={s.td}>{fmt(u.volumes_total)}</td>
-                            <td style={s.td}>{fmt(u.cnpjs_distintos)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          <td style={{ ...s.td, fontWeight: 600, color: '#f0c040' }}>TOTAL</td>
-                          <td style={{ ...s.td, fontWeight: 600 }}>{fmt(dados.por_unidade.reduce((s, u) => s + u.total_entregas, 0))}</td>
-                          <td style={{ ...s.td, fontWeight: 600, color: '#3de8a0' }}>{fmtCurrency(dados.por_unidade.reduce((s, u) => s + Number(u.frete_total), 0))}</td>
-                          <td style={{ ...s.td, fontWeight: 600 }}>{fmtKg(dados.por_unidade.reduce((s, u) => s + Number(u.peso_total), 0))}</td>
-                          <td style={{ ...s.td, fontWeight: 600 }}>{fmt(dados.por_unidade.reduce((s, u) => s + u.volumes_total, 0))}</td>
-                          <td style={{ ...s.td, fontWeight: 600 }}>{fmt(dados.por_unidade.reduce((s, u) => s + u.cnpjs_distintos, 0))}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
+                </div>
+              );
+            })}
           </>
-        ) : null}
+        )}
       </div>
     </div>
   );
@@ -230,25 +234,20 @@ const s = {
   title: { fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.8rem', letterSpacing: '2px', color: '#f0c040', marginBottom: 4 },
   sub: { color: '#6b7280', fontSize: '0.85rem', marginBottom: 20 },
   error: { background: '#2a1a1a', border: '1px solid #ff5a5a', color: '#ff5a5a', padding: '10px 16px', borderRadius: 4, marginBottom: 20 },
-  loadingBox: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' },
-  spinner: { width: 32, height: 32, border: '3px solid #2a2f3e', borderTopColor: '#f0c040', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
   filterBar: { display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 24, background: '#161920', border: '1px solid #2a2f3e', borderRadius: 8, padding: '16px 20px' },
   filterGroup: { display: 'flex', flexDirection: 'column', gap: 4 },
   filterLabel: { fontSize: '0.65rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '1px' },
   filterInput: { background: '#1e2230', border: '1px solid #2a2f3e', color: '#e8eaf0', padding: '8px 12px', borderRadius: 4, fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.82rem', minWidth: 160 },
   filterBtn: { background: '#f0c040', color: '#0d0f14', border: 'none', padding: '9px 24px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', fontFamily: "'IBM Plex Mono', monospace", marginBottom: 1 },
-  kpiRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 },
-  kpiCard: { background: '#161920', border: '1px solid #2a2f3e', borderBottom: '3px solid', borderRadius: 8, padding: '16px', display: 'flex', flexDirection: 'column', gap: 4 },
-  kpiLabel: { fontSize: '0.65rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '1px' },
-  kpiValue: { fontSize: '1.3rem', fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace" },
-  tabBar: { display: 'flex', gap: 8, marginBottom: 20 },
-  tabBtn: { background: '#1e2230', border: '1px solid #2a2f3e', color: '#6b7280', padding: '10px 20px', borderRadius: 4, cursor: 'pointer', fontSize: '0.85rem', fontFamily: "'IBM Plex Mono', monospace", transition: 'all .15s' },
-  tabBtnActive: { background: '#1e2230', borderColor: '#f0c040', color: '#f0c040' },
-  section: { marginBottom: 32 },
-  sectionTitle: { fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.1rem', letterSpacing: '2px', color: '#f0c040', marginBottom: 12 },
-  tableWrap: { background: '#161920', border: '1px solid #2a2f3e', borderRadius: 8, overflow: 'hidden' },
-  table: { width: '100%', borderCollapse: 'collapse' },
+  card: { background: '#161920', border: '1px solid #2a2f3e', borderRadius: 8, overflow: 'hidden', marginBottom: 20 },
+  cardHeader: { padding: '12px 20px', background: '#1e2230', borderBottom: '1px solid #2a2f3e', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+  cardTitle: { margin: 0, fontSize: '0.95rem', color: '#e8eaf0' },
+  badge: { background: '#2a2f3e', color: '#e8eaf0', padding: '3px 10px', borderRadius: 12, fontSize: '0.7rem', fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace" },
+  tableWrap: { overflowX: 'auto' },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' },
   th: { padding: '10px 14px', textAlign: 'left', fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '1px', borderBottom: '1px solid #2a2f3e', background: '#1e2230', fontFamily: "'IBM Plex Mono', monospace" },
   td: { padding: '10px 14px', fontSize: '0.8rem', borderBottom: '1px solid #2a2f3e', color: '#e8eaf0', fontFamily: "'IBM Plex Mono', monospace" },
-  empty: { textAlign: 'center', color: '#6b7280', padding: 40, fontSize: '0.9rem' },
+  loadingBox: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' },
+  spinner: { width: 32, height: 32, border: '3px solid #2a2f3e', borderTopColor: '#f0c040', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
+  empty: { textAlign: 'center', color: '#6b7280', padding: 40, fontSize: '0.9rem', background: '#161920', borderRadius: 8, border: '1px solid #2a2f3e' },
 };

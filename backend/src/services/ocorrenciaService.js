@@ -2,9 +2,7 @@ import { pool } from '../db/index.js';
 
 export async function listarOcorrencias() {
   const result = await pool.query(`
-    SELECT o.*,
-      (SELECT COUNT(*)::int FROM ssw_ctrcs c WHERE UPPER(c.ocorrencia) LIKE UPPER(o.descricao) || '%') AS usos_ctrcs,
-      (SELECT COUNT(*)::int FROM ssw_455 v WHERE UPPER(v.ocorrencia) LIKE UPPER(o.descricao) || '%') AS usos_455
+    SELECT o.*
     FROM ocorrencia_catalogo o
     ORDER BY o.finalizadora DESC, o.descricao
   `);
@@ -12,24 +10,24 @@ export async function listarOcorrencias() {
 }
 
 export async function criarOcorrencia(dados) {
-  const { codigo, descricao, finalizadora } = dados;
+  const { codigo, descricao, finalizadora, resumo } = dados;
   if (!descricao) throw new Error('Descricao obrigatoria');
   const result = await pool.query(`
-    INSERT INTO ocorrencia_catalogo (codigo, descricao, finalizadora)
-    VALUES ($1, $2, $3)
+    INSERT INTO ocorrencia_catalogo (codigo, descricao, finalizadora, resumo)
+    VALUES ($1, $2, $3, $4)
     RETURNING *
-  `, [codigo || null, descricao.trim().toUpperCase(), finalizadora === true]);
+  `, [codigo || null, descricao.trim().toUpperCase(), finalizadora === true, resumo || null]);
   return result.rows[0];
 }
 
 export async function atualizarOcorrencia(id, dados) {
-  const { codigo, descricao, finalizadora } = dados;
+  const { codigo, descricao, finalizadora, resumo } = dados;
   const result = await pool.query(`
     UPDATE ocorrencia_catalogo
-    SET codigo = $1, descricao = $2, finalizadora = $3
-    WHERE id = $4
+    SET codigo = $1, descricao = $2, finalizadora = $3, resumo = $4
+    WHERE id = $5
     RETURNING *
-  `, [codigo || null, (descricao || '').trim().toUpperCase(), finalizadora === true, id]);
+  `, [codigo || null, (descricao || '').trim().toUpperCase(), finalizadora === true, resumo || null, id]);
   return result.rowCount > 0 ? result.rows[0] : null;
 }
 
