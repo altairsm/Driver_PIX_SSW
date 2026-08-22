@@ -270,7 +270,7 @@ router.get('/gestao', async (req, res) => {
       JOIN pagadores p ON p.cnpj = v.cnpj_pagador
       LEFT JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'
       ${where}
-      GROUP BY cliente, status_prazo
+      GROUP BY 1, 2
       ORDER BY cliente, 
         CASE status_prazo WHEN 'A Vencer' THEN 1 WHEN 'Vence hoje' THEN 2 WHEN 'Vencido' THEN 3 END
     `, params);
