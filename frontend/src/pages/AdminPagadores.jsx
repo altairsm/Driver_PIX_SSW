@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getPagadores, createPagador, updatePagador, deletePagador, getResumoPagador } from '../services/api';
+import { getPagadores, createPagador, updatePagador, deletePagador } from '../services/api';
 import Topbar from '../components/Topbar';
 
 export default function AdminPagadores() {
@@ -12,9 +12,6 @@ export default function AdminPagadores() {
   const [editando, setEditando] = useState(null);
   const [form, setForm] = useState({ cnpj: '', razao_social: '', nome_simplificado: '' });
   const [salvando, setSalvando] = useState(false);
-  const [resumo, setResumo] = useState(null);
-  const [resumoLoading, setResumoLoading] = useState(false);
-  const [resumoFiltro, setResumoFiltro] = useState({ inicio: '', fim: '' });
 
   const carregar = async () => {
     setLoading(true);
@@ -85,18 +82,6 @@ export default function AdminPagadores() {
     }
   };
 
-  const handleVerResumo = async (p) => {
-    setResumoLoading(true);
-    try {
-      const data = await getResumoPagador(p.cnpj, resumoFiltro.inicio || null, resumoFiltro.fim || null);
-      setResumo(data);
-    } catch {
-      alert('Erro ao carregar resumo');
-    } finally {
-      setResumoLoading(false);
-    }
-  };
-
   const formatCnpj = (v) => {
     const c = (v || '').replace(/\D/g, '');
     return c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
@@ -123,9 +108,6 @@ export default function AdminPagadores() {
                     <th style={s.th}>CNPJ</th>
                     <th style={s.th}>Razão Social</th>
                     <th style={s.th}>Nome Simplificado</th>
-                    <th style={s.th}>Entregas</th>
-                    <th style={s.th}>Frete Total</th>
-                    <th style={s.th}>Peso Total</th>
                     <th style={s.th}>Ações</th>
                   </tr></thead>
                   <tbody>
@@ -148,11 +130,7 @@ export default function AdminPagadores() {
                         <td style={s.td}>{formatCnpj(p.cnpj)}</td>
                         <td style={s.td}>{p.razao_social}</td>
                         <td style={s.td}>{p.nome_simplificado || '—'}</td>
-                        <td style={s.td}>{p.total_entregas || 0}</td>
-                        <td style={{ ...s.td, color: '#3de8a0' }}>R$ {Number(p.frete_total || 0).toFixed(2)}</td>
-                        <td style={s.td}>{Number(p.peso_total || 0).toFixed(1)} kg</td>
                         <td style={{ ...s.td, whiteSpace: 'nowrap' }}>
-                          <button style={s.btnSm('#0d6efd', '#fff')} onClick={() => handleVerResumo(p)} disabled={resumoLoading}>Resumo</button>
                           {isAdmin && <>
                             <button style={s.btnSm('#ffc107', '#0d0f14')} onClick={() => abrirEditar(p)}>Editar</button>
                             <button style={s.btnSm('#dc3545', '#fff')} onClick={() => handleExcluir(p)}>Excluir</button>
@@ -166,94 +144,9 @@ export default function AdminPagadores() {
             }
           </div>
         </div>
+        </div>
 
-        {resumo && (
-          <div style={s.card}>
-            <div style={s.cardHeader}>
-              <h5 style={s.cardTitle}>Resumo — {resumo.pagador?.razao_social || resumo.pagador?.nome_simplificado}</h5>
-              <button style={s.btnSm('#6c757d', '#fff')} onClick={() => setResumo(null)}>Fechar</button>
-            </div>
-            <div style={s.cardBody}>
-              <div style={s.resumoGrid}>
-                <div style={s.resumoItem}>
-                  <div style={s.resumoLabel}>Total Entregas</div>
-                  <div style={s.resumoValor}>{resumo.resumo?.total_entregas || 0}</div>
-                </div>
-                <div style={s.resumoItem}>
-                  <div style={s.resumoLabel}>Frete Total</div>
-                  <div style={{ ...s.resumoValor, color: '#3de8a0' }}>R$ {Number(resumo.resumo?.frete_total || 0).toFixed(2)}</div>
-                </div>
-                <div style={s.resumoItem}>
-                  <div style={s.resumoLabel}>Peso Total</div>
-                  <div style={s.resumoValor}>{Number(resumo.resumo?.peso_total || 0).toFixed(1)} kg</div>
-                </div>
-                <div style={s.resumoItem}>
-                  <div style={s.resumoLabel}>Volumes</div>
-                  <div style={s.resumoValor}>{resumo.resumo?.volumes_total || 0}</div>
-                </div>
-                <div style={s.resumoItem}>
-                  <div style={s.resumoLabel}>Frete Médio</div>
-                  <div style={s.resumoValor}>R$ {Number(resumo.resumo?.frete_medio || 0).toFixed(2)}</div>
-                </div>
-                <div style={s.resumoItem}>
-                  <div style={s.resumoLabel}>Unidades Envolvidas</div>
-                  <div style={s.resumoValor}>{resumo.resumo?.unidades_envolvidas || 0}</div>
-                </div>
-              </div>
-
-              {resumo.por_unidade?.length > 0 && (
-                <>
-                  <h6 style={s.subTitle}>Por Unidade Receptora</h6>
-                  <table style={s.table}>
-                    <thead><tr>
-                      <th style={s.th}>Unidade</th>
-                      <th style={s.th}>Entregas</th>
-                      <th style={s.th}>Frete Total</th>
-                      <th style={s.th}>Peso Total</th>
-                    </tr></thead>
-                    <tbody>
-                      {resumo.por_unidade.map((u, i) => (
-                        <tr key={i}>
-                          <td style={s.td}>{u.unidade_receptora || '—'}</td>
-                          <td style={s.td}>{u.total_entregas}</td>
-                          <td style={{ ...s.td, color: '#3de8a0' }}>R$ {Number(u.frete_total).toFixed(2)}</td>
-                          <td style={s.td}>{Number(u.peso_total).toFixed(1)} kg</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </>
-              )}
-
-              {resumo.por_cidade?.length > 0 && (
-                <>
-                  <h6 style={s.subTitle}>Por Cidade de Entrega</h6>
-                  <table style={s.table}>
-                    <thead><tr>
-                      <th style={s.th}>Cidade</th>
-                      <th style={s.th}>UF</th>
-                      <th style={s.th}>Entregas</th>
-                      <th style={s.th}>Frete Total</th>
-                    </tr></thead>
-                    <tbody>
-                      {resumo.por_cidade.map((c, i) => (
-                        <tr key={i}>
-                          <td style={s.td}>{c.cidade_entrega}</td>
-                          <td style={s.td}>{c.uf_entrega}</td>
-                          <td style={s.td}>{c.total_entregas}</td>
-                          <td style={{ ...s.td, color: '#3de8a0' }}>R$ {Number(c.frete_total).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {modalAberto && (
+        {modalAberto && (
         <div style={s.overlay} onClick={fecharModal}>
           <div style={s.modal} onClick={(e) => e.stopPropagation()}>
             <div style={s.mh}>

@@ -2,14 +2,8 @@ import { pool } from '../db/index.js';
 
 export async function listarPagadores() {
   const result = await pool.query(`
-    SELECT p.*,
-      COUNT(v.ctrc) AS total_entregas,
-      COALESCE(SUM(v.valor_frete), 0)::numeric(10,2) AS frete_total,
-      COALESCE(SUM(v.peso_real), 0)::numeric(10,3) AS peso_total,
-      COALESCE(SUM(v.volumes), 0)::int AS volumes_total
+    SELECT p.*
     FROM pagadores p
-    LEFT JOIN ssw_455 v ON v.cnpj_pagador = p.cnpj
-    GROUP BY p.id
     ORDER BY p.razao_social
   `);
   return result.rows;
