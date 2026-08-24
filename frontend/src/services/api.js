@@ -345,6 +345,15 @@ export async function getGestao(inicio, fim, unidade) {
   return data;
 }
 
+export async function exportGestao(inicio, fim, unidade) {
+  const params = {};
+  if (inicio) params.inicio = inicio;
+  if (fim) params.fim = fim;
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/gestao/export', { params, timeout: 300000 });
+  return data;
+}
+
 // Upload SSW 455
 export async function uploadSsw455(file) {
   const formData = new FormData();

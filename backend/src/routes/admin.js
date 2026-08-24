@@ -331,4 +331,56 @@ router.post('/motoristas/:cpf/enviar-senha', requireRole('admin', 'operador'), a
   }
 });
 
+router.get('/gestao/export', async (req, res) => {
+  try {
+    const { inicio, fim, unidade } = req.query;
+    const params = [];
+    const conditions = ['p.ativo = true'];
+
+    if (inicio) { params.push(inicio); conditions.push(`v.data_emissao >= $${params.length}::date`); }
+    if (fim) { params.push(fim); conditions.push(`v.data_emissao <= $${params.length}::date`); }
+    if (unidade) { params.push(unidade); conditions.push(`v.unidade_receptora = $${params.length}`); }
+
+    conditions.push('v.previsao_entrega IS NOT NULL');
+    conditions.push('(oc.id IS NULL OR oc.finalizadora != true)');
+
+    const where = `WHERE ${conditions.join(' AND ')}`;
+
+    const { rows } = await pool.query(`
+      SELECT
+        v.ctrc,
+        COALESCE(p.nome_simplificado, v.cliente_pagador) AS cliente_pagador,
+        v.cidade_entrega,
+        v.data_emissao,
+        v.previsao_entrega,
+        CASE
+          WHEN v.previsao_entrega < CURRENT_DATE THEN 'Vencido'
+          WHEN v.previsao_entrega = CURRENT_DATE THEN 'Vence hoje'
+          ELSE 'A Vencer'
+        END AS status_prazo,
+        COALESCE(oc.resumo, 'Na filial') AS resumo_ocorrencia,
+        v.ocorrencia,
+        v.unidade_receptora,
+        v.data_ultima_ocorrencia,
+        v.numero_nota_fiscal
+      FROM ssw_455 v
+      JOIN pagadores p ON p.cnpj = v.cnpj_pagador
+      LEFT JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+      ${where}
+      ORDER BY v.cliente_pagador,
+        CASE
+          WHEN v.previsao_entrega < CURRENT_DATE THEN 1
+          WHEN v.previsao_entrega = CURRENT_DATE THEN 2
+          ELSE 3
+        END,
+        v.previsao_entrega
+    `, params);
+
+    res.json(rows);
+  } catch (err) {
+    console.error('Erro ao exportar gestão:', err);
+    res.status(500).json({ error: 'Erro ao exportar dados da gestão' });
+  }
+});
+
 export default router;

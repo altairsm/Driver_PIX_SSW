@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getGestao, getUnidades } from '../services/api';
+import { getGestao, getUnidades, exportGestao } from '../services/api';
+import * as XLSX from 'xlsx';
 import Topbar from '../components/Topbar';
 
 const STATUS_ORDER = ['A Vencer', 'Vence hoje', 'Vencido'];
@@ -21,6 +22,7 @@ export default function AdminGestao() {
   const [unidades, setUnidades] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [exportando, setExportando] = useState(false);
   const [filtro, setFiltro] = useState({
     inicio: new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10),
     fim: new Date().toISOString().slice(0, 10),
@@ -52,6 +54,43 @@ export default function AdminGestao() {
   const handleFiltrar = (e) => {
     e.preventDefault();
     carregar();
+  };
+
+  const handleExportar = async () => {
+    setExportando(true);
+    try {
+      const rows = await exportGestao(filtro.inicio || null, filtro.fim || null, filtro.unidade || null);
+      if (!rows || rows.length === 0) {
+        alert('Nenhum dado para exportar');
+        return;
+      }
+      const excelData = rows.map(r => ({
+        'CTRC': r.ctrc,
+        'Cliente Pagador': r.cliente_pagador,
+        'Cidade Entrega': r.cidade_entrega,
+        'Data Emissão': r.data_emissao ? new Date(r.data_emissao + 'T00:00:00').toLocaleDateString('pt-BR') : '',
+        'Previsão Entrega': r.previsao_entrega ? new Date(r.previsao_entrega + 'T00:00:00').toLocaleDateString('pt-BR') : '',
+        'Status Prazo': r.status_prazo,
+        'Resumo Ocorrência': r.resumo_ocorrencia,
+        'Ocorrência': r.ocorrencia,
+        'Unidade Receptora': r.unidade_receptora,
+        'Data Última Ocorrência': r.data_ultima_ocorrencia ? new Date(r.data_ultima_ocorrencia + 'T00:00:00').toLocaleDateString('pt-BR') : '',
+        'Nº Nota Fiscal': r.numero_nota_fiscal,
+      }));
+      const ws = XLSX.utils.json_to_sheet(excelData);
+      ws['!cols'] = [
+        { wch: 14 }, { wch: 30 }, { wch: 22 }, { wch: 14 }, { wch: 14 },
+        { wch: 12 }, { wch: 18 }, { wch: 45 }, { wch: 14 }, { wch: 14 }, { wch: 18 },
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'CT-e Prazo Entrega');
+      const hoje = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `gestao_prazo_entrega_${hoje}.xlsx`);
+    } catch {
+      alert('Erro ao exportar dados');
+    } finally {
+      setExportando(false);
+    }
   };
 
   const agrupado = {};
@@ -142,6 +181,9 @@ export default function AdminGestao() {
           </div>
           <button type="submit" style={s.filterBtn} disabled={loading}>
             {loading ? 'Carregando...' : 'Filtrar'}
+          </button>
+          <button type="button" style={{ ...s.filterBtn, background: '#198754', color: '#fff' }} onClick={handleExportar} disabled={exportando || loading}>
+            {exportando ? 'Exportando...' : '📥 Exportar Excel'}
           </button>
         </form>
 
