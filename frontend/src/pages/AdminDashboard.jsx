@@ -82,16 +82,25 @@ export default function AdminDashboard() {
       const rows = dados.map(r => ({
         'Nota Fiscal': r.nf || '',
         'CTRC': r.ctrc || '',
-        'Data Emissao': fmtDate(r.data_emissao),
-        'Previsao de Entrega': fmtDate(r.previsao_entrega),
-        'Data Ultima Ocorrencia': fmtDate(r.data_ultima_ocorrencia),
-        'Ocorrencia Atual': r.ocorrencia || '',
+        'Cliente Pagador': r.cliente_pagador || '',
+        'Data Emissão': fmtDate(r.data_emissao),
+        'Previsão Entrega': fmtDate(r.previsao_entrega),
+        'Status Prazo': r.status_prazo || '',
+        'Resumo Ocorrência': r.resumo_ocorrencia || '',
+        'Ocorrência': r.ocorrencia || '',
         'Cidade': r.cidade_entrega || '',
+        'Unidade': r.unidade_receptora || '',
+        'Cubagem (m³)': Number(r.cubagem_m3 || 0),
+        'Valor Mercadoria': Number(r.valor_mercadoria || 0),
+        'Setor Destino': r.setor_destino || '',
+        'Tipo Baixa': r.tipo_baixa || '',
+        'Dias Parados': Number(r.dias_parados || 0),
       }));
       const ws = XLSX.utils.json_to_sheet(rows);
       ws['!cols'] = [
-        { wch: 15 }, { wch: 18 }, { wch: 14 },
-        { wch: 18 }, { wch: 18 }, { wch: 35 }, { wch: 25 },
+        { wch: 15 }, { wch: 18 }, { wch: 30 }, { wch: 14 }, { wch: 14 },
+        { wch: 12 }, { wch: 18 }, { wch: 40 }, { wch: 22 }, { wch: 10 },
+        { wch: 12 }, { wch: 16 }, { wch: 20 }, { wch: 14 }, { wch: 12 },
       ];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'CTRCs Parados');

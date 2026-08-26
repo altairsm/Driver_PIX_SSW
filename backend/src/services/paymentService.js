@@ -297,17 +297,32 @@ export async function getCtrcsParadosDetalhado(unidade) {
     SELECT
       v.numero_nota_fiscal AS nf,
       c.ctrc,
+      COALESCE(p.nome_simplificado, v.cliente_pagador, c.remetente) AS cliente_pagador,
       c.data_emissao,
       v.previsao_entrega,
-      v.data_ultima_ocorrencia,
+      CASE
+        WHEN v.previsao_entrega < CURRENT_DATE THEN 'Vencido'
+        WHEN v.previsao_entrega = CURRENT_DATE THEN 'Vence hoje'
+        WHEN v.previsao_entrega IS NULL THEN 'Sem previsão'
+        ELSE 'A Vencer'
+      END AS status_prazo,
+      COALESCE(oc.resumo, 'Na filial') AS resumo_ocorrencia,
       c.ocorrencia,
-      c.cidade_entrega
+      c.cidade_entrega,
+      c.unidade_receptora,
+      v.cubagem_m3,
+      v.valor_mercadoria,
+      v.setor_destino,
+      v.tipo_baixa,
+      (CURRENT_DATE - c.data_emissao) AS dias_parados
     FROM ssw_ctrcs c
     LEFT JOIN ssw_455 v ON REPLACE(c.ctrc, ' ', '') = v.ctrc_normalizado
+    LEFT JOIN pagadores p ON p.cnpj = v.cnpj_pagador
+    LEFT JOIN ocorrencia_catalogo oc ON UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%'
     WHERE NOT EXISTS (
-      SELECT 1 FROM ocorrencia_catalogo oc
-      WHERE oc.finalizadora = true
-        AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+      SELECT 1 FROM ocorrencia_catalogo oc2
+      WHERE oc2.finalizadora = true
+        AND UPPER(c.ocorrencia) LIKE UPPER(oc2.descricao) || '%'
     )
     ${where}
     ORDER BY c.data_emissao ASC

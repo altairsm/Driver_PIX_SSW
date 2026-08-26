@@ -65,17 +65,17 @@ export default function AdminGestao() {
         return;
       }
       const excelData = rows.map(r => ({
+        'Nota Fiscal': r.numero_nota_fiscal || '',
         'CTRC': r.ctrc,
         'Cliente Pagador': r.cliente_pagador,
-        'Cidade Entrega': r.cidade_entrega,
         'Data Emissão': r.data_emissao ? new Date(r.data_emissao + 'T00:00:00').toLocaleDateString('pt-BR') : '',
         'Previsão Entrega': r.previsao_entrega ? new Date(r.previsao_entrega + 'T00:00:00').toLocaleDateString('pt-BR') : '',
         'Status Prazo': r.status_prazo,
         'Resumo Ocorrência': r.resumo_ocorrencia,
         'Ocorrência': r.ocorrencia,
+        'Cidade Entrega': r.cidade_entrega,
         'Unidade Receptora': r.unidade_receptora,
         'Data Última Ocorrência': r.data_ultima_ocorrencia ? new Date(r.data_ultima_ocorrencia + 'T00:00:00').toLocaleDateString('pt-BR') : '',
-        'Nº Nota Fiscal': r.numero_nota_fiscal,
         'Cubagem (m³)': r.cubagem_m3 || 0,
         'Valor Mercadoria': r.valor_mercadoria || 0,
         'Setor Destino': r.setor_destino || '',
@@ -83,9 +83,9 @@ export default function AdminGestao() {
       }));
       const ws = XLSX.utils.json_to_sheet(excelData);
       ws['!cols'] = [
-        { wch: 14 }, { wch: 30 }, { wch: 22 }, { wch: 14 }, { wch: 14 },
-        { wch: 12 }, { wch: 18 }, { wch: 45 }, { wch: 14 }, { wch: 14 }, { wch: 18 },
-        { wch: 12 }, { wch: 16 }, { wch: 20 }, { wch: 14 },
+        { wch: 15 }, { wch: 18 }, { wch: 30 }, { wch: 14 }, { wch: 14 },
+        { wch: 12 }, { wch: 18 }, { wch: 40 }, { wch: 22 }, { wch: 10 },
+        { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 20 }, { wch: 14 },
       ];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'CT-e Prazo Entrega');
