@@ -354,6 +354,13 @@ export async function exportGestao(inicio, fim, unidade) {
   return data;
 }
 
+export async function getExpedicao(unidade) {
+  const params = {};
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/expedicao', { params });
+  return data;
+}
+
 // Upload SSW 455
 export async function uploadSsw455(file) {
   const formData = new FormData();

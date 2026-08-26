@@ -331,6 +331,44 @@ router.post('/motoristas/:cpf/enviar-senha', requireRole('admin', 'operador'), a
   }
 });
 
+router.get('/expedicao', async (req, res) => {
+  try {
+    const { unidade } = req.query;
+    const params = [];
+    const conditions = [];
+
+    if (unidade) { params.push(unidade); conditions.push(`v.unidade_receptora = $${params.length}`); }
+    conditions.push('(oc.id IS NULL OR oc.resumo IS NULL OR oc.resumo != \'Em rota\')');
+    conditions.push('(oc.id IS NULL OR oc.finalizadora != true)');
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const { rows } = await pool.query(`
+      SELECT
+        v.ctrc,
+        COALESCE(p.nome_simplificado, v.cliente_pagador) AS cliente_pagador,
+        v.cidade_entrega,
+        v.unidade_receptora,
+        v.cubagem_m3,
+        v.valor_mercadoria,
+        v.setor_destino,
+        v.data_emissao,
+        v.ocorrencia,
+        COALESCE(oc.resumo, 'Na filial') AS resumo
+      FROM ssw_455 v
+      JOIN pagadores p ON p.cnpj = v.cnpj_pagador
+      LEFT JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+      ${where}
+      ORDER BY v.cliente_pagador, v.data_emissao
+    `, params);
+
+    res.json(rows);
+  } catch (err) {
+    console.error('Erro ao buscar expedição:', err);
+    res.status(500).json({ error: 'Erro ao buscar dados de expedição' });
+  }
+});
+
 router.get('/gestao/export', async (req, res) => {
   try {
     const { inicio, fim, unidade } = req.query;
@@ -362,7 +400,11 @@ router.get('/gestao/export', async (req, res) => {
         v.ocorrencia,
         v.unidade_receptora,
         v.data_ultima_ocorrencia,
-        v.numero_nota_fiscal
+        v.numero_nota_fiscal,
+        v.cubagem_m3,
+        v.valor_mercadoria,
+        v.setor_destino,
+        v.tipo_baixa
       FROM ssw_455 v
       JOIN pagadores p ON p.cnpj = v.cnpj_pagador
       LEFT JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'

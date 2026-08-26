@@ -76,11 +76,16 @@ export default function AdminGestao() {
         'Unidade Receptora': r.unidade_receptora,
         'Data Última Ocorrência': r.data_ultima_ocorrencia ? new Date(r.data_ultima_ocorrencia + 'T00:00:00').toLocaleDateString('pt-BR') : '',
         'Nº Nota Fiscal': r.numero_nota_fiscal,
+        'Cubagem (m³)': r.cubagem_m3 || 0,
+        'Valor Mercadoria': r.valor_mercadoria || 0,
+        'Setor Destino': r.setor_destino || '',
+        'Tipo Baixa': r.tipo_baixa || '',
       }));
       const ws = XLSX.utils.json_to_sheet(excelData);
       ws['!cols'] = [
         { wch: 14 }, { wch: 30 }, { wch: 22 }, { wch: 14 }, { wch: 14 },
         { wch: 12 }, { wch: 18 }, { wch: 45 }, { wch: 14 }, { wch: 14 }, { wch: 18 },
+        { wch: 12 }, { wch: 16 }, { wch: 20 }, { wch: 14 },
       ];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'CT-e Prazo Entrega');

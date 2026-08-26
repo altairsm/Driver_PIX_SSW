@@ -178,6 +178,10 @@ export async function importarSsw455(rows) {
       const numeroNotaFiscal = (row['Numero da Nota Fiscal'] || '').trim();
       const previsaoEntrega = parseBrDate(row['Previsao de Entrega']);
       const dataUltimaOcorrencia = parseBrDate(row['Data da Ultima Ocorrencia']);
+      const cubagemM3 = parseFloat((row['Cubagem em m3'] || '0').replace(/\./g, '').replace(',', '.')) || 0;
+      const tipoBaixa = (row['Tipo de Baixa'] || '').trim();
+      const valorMercadoria = parseFloat((row['Valor da Mercadoria'] || '0').replace(/\./g, '').replace(',', '.')) || 0;
+      const setorDestino = (row['Setor de Destino'] || '').trim();
 
       await pool.query(`
         INSERT INTO ssw_455 (
@@ -186,8 +190,9 @@ export async function importarSsw455(rows) {
           cidade_entrega, uf_entrega, cep_entrega,
           peso_real, volumes, valor_frete, tipo_frete,
           data_baixa, ocorrencia, controle_duplicidade,
-          numero_nota_fiscal, previsao_entrega, data_ultima_ocorrencia
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+          numero_nota_fiscal, previsao_entrega, data_ultima_ocorrencia,
+          cubagem_m3, tipo_baixa, valor_mercadoria, setor_destino
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
         ON CONFLICT ("controle_duplicidade") DO UPDATE SET
           unidade_receptora = EXCLUDED.unidade_receptora,
           ocorrencia = EXCLUDED.ocorrencia,
@@ -195,7 +200,11 @@ export async function importarSsw455(rows) {
           valor_frete = EXCLUDED.valor_frete,
           numero_nota_fiscal = EXCLUDED.numero_nota_fiscal,
           previsao_entrega = EXCLUDED.previsao_entrega,
-          data_ultima_ocorrencia = EXCLUDED.data_ultima_ocorrencia
+          data_ultima_ocorrencia = EXCLUDED.data_ultima_ocorrencia,
+          cubagem_m3 = EXCLUDED.cubagem_m3,
+          tipo_baixa = EXCLUDED.tipo_baixa,
+          valor_mercadoria = EXCLUDED.valor_mercadoria,
+          setor_destino = EXCLUDED.setor_destino
       `, [
         ctrc, ctrcNormalizado, serieNumeroCte, dataEmissao,
         cnpjPagador, clientePagador, unidadeReceptora,
@@ -203,6 +212,7 @@ export async function importarSsw455(rows) {
         pesoReal, volumes, valorFrete, tipoFrete,
         dataBaixa, ocorrencia, controleDuplicidade,
         numeroNotaFiscal, previsaoEntrega, dataUltimaOcorrencia,
+        cubagemM3, tipoBaixa, valorMercadoria, setorDestino,
       ]);
 
       if (cnpjPagador && !cnpjsVistos.has(cnpjPagador)) {

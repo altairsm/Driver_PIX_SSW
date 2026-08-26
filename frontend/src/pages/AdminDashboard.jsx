@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getEficienciaMotoristas, getAppUsageMotoristas, getCtrcsParados, getCtrcsParadosDetalhado } from '../services/api';
+import { getEficienciaMotoristas, getAppUsageMotoristas, getCtrcsParados, getCtrcsParadosDetalhado, getExpedicao } from '../services/api';
 import api from '../services/api';
 import * as XLSX from 'xlsx';
 import Topbar from '../components/Topbar';
@@ -13,6 +13,7 @@ export default function AdminDashboard() {
   const [eficiencia, setEficiencia] = useState([]);
   const [appUsage, setAppUsage] = useState([]);
   const [ctrcsParados, setCtrcsParados] = useState([]);
+  const [expedicao, setExpedicao] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('eficiencia');
@@ -25,14 +26,16 @@ export default function AdminDashboard() {
       const fFim = f?.fim || null;
       const fTipo = f?.tipo || null;
       const fUnidade = f?.unidade || null;
-      const [ef, app, parados] = await Promise.all([
+      const [ef, app, parados, exp] = await Promise.all([
         getEficienciaMotoristas(fInicio, fFim, fTipo, fUnidade),
         getAppUsageMotoristas(fInicio, fFim, fTipo, fUnidade),
         getCtrcsParados(fUnidade),
+        getExpedicao(fUnidade),
       ]);
       setEficiencia(ef);
       setAppUsage(app);
       setCtrcsParados(parados);
+      setExpedicao(exp);
     } catch {
       setError('Erro ao carregar dados do dashboard');
     } finally {
@@ -163,6 +166,7 @@ export default function AdminDashboard() {
             { id: 'eficiencia', label: 'Eficiência', icon: '📊' },
             { id: 'app', label: 'Uso do App', icon: '📱' },
             { id: 'aging', label: 'CTRCs Parados', icon: '⏳' },
+            { id: 'expedicao', label: 'Expedição', icon: '📦' },
           ].map(t => (
             <button key={t.id} style={{ ...s.tabBtn, ...(activeTab === t.id ? s.tabBtnActive : {}) }} onClick={() => setActiveTab(t.id)}>
               <span>{t.icon}</span> {t.label}
@@ -349,6 +353,83 @@ export default function AdminDashboard() {
                   </tfoot>
                 </table>
               </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'expedicao' && (
+          <div style={s.section}>
+            <div style={s.sectionTitle}>Expedição — CT-e's Disponíveis</div>
+            <div style={s.sectionSub}>CT-e's que não estão em rota e sem ocorrência finalizadora</div>
+
+            {expedicao.length === 0 ? (
+              <div style={s.empty}>Nenhum CT-e encontrado para expedição.</div>
+            ) : (
+              <>
+                <div style={s.agingCards}>
+                  <div style={{ ...s.agingCard, borderBottomColor: '#3de8a0' }}>
+                    <div style={s.agingLbl}>Total CT-e's</div>
+                    <div style={{ ...s.agingVal, color: '#3de8a0' }}>{expedicao.length}</div>
+                  </div>
+                  <div style={{ ...s.agingCard, borderBottomColor: '#0d6efd' }}>
+                    <div style={s.agingLbl}>Cubagem Total (m³)</div>
+                    <div style={{ ...s.agingVal, color: '#0d6efd' }}>{expedicao.reduce((s, r) => s + (Number(r.cubagem_m3) || 0), 0).toFixed(3)}</div>
+                  </div>
+                  <div style={{ ...s.agingCard, borderBottomColor: '#f0c040' }}>
+                    <div style={s.agingLbl}>Valor Mercadoria (R$)</div>
+                    <div style={{ ...s.agingVal, color: '#f0c040' }}>{expedicao.reduce((s, r) => s + (Number(r.valor_mercadoria) || 0), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                  </div>
+                </div>
+
+                <div style={s.tableWrap}>
+                  <table style={s.table}>
+                    <thead>
+                      <tr>
+                        <th style={s.th}>CTRC</th>
+                        <th style={s.th}>Cliente</th>
+                        <th style={s.th}>Cidade</th>
+                        <th style={s.th}>Unidade</th>
+                        <th style={s.th}>Cubagem (m³)</th>
+                        <th style={s.th}>Valor Mercadoria</th>
+                        <th style={s.th}>Setor Destino</th>
+                        <th style={s.th}>Data Emissão</th>
+                        <th style={s.th}>Ocorrência</th>
+                        <th style={s.th}>Resumo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {expedicao.map((r, i) => (
+                        <tr key={i}>
+                          <td style={s.td}>{r.ctrc}</td>
+                          <td style={s.td}>{r.cliente_pagador}</td>
+                          <td style={s.td}>{r.cidade_entrega}</td>
+                          <td style={s.td}>{r.unidade_receptora}</td>
+                          <td style={s.td}>{Number(r.cubagem_m3 || 0).toFixed(3)}</td>
+                          <td style={s.td}>{Number(r.valor_mercadoria || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                          <td style={s.td}>{r.setor_destino || '—'}</td>
+                          <td style={s.td}>{r.data_emissao ? new Date(r.data_emissao + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                          <td style={{ ...s.td, maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.ocorrencia || '—'}</td>
+                          <td style={s.td}>{r.resumo}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td style={{ ...s.td, fontWeight: 600, color: '#f0c040' }}>TOTAL</td>
+                        <td style={s.td}></td>
+                        <td style={s.td}></td>
+                        <td style={s.td}></td>
+                        <td style={{ ...s.td, fontWeight: 600, color: '#0d6efd' }}>{expedicao.reduce((s, r) => s + (Number(r.cubagem_m3) || 0), 0).toFixed(3)}</td>
+                        <td style={{ ...s.td, fontWeight: 600, color: '#f0c040' }}>{expedicao.reduce((s, r) => s + (Number(r.valor_mercadoria) || 0), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        <td style={s.td}></td>
+                        <td style={s.td}></td>
+                        <td style={s.td}></td>
+                        <td style={{ ...s.td, fontWeight: 600, color: '#f0c040' }}>{expedicao.length}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         )}
