@@ -174,6 +174,7 @@ export async function importarSsw455(rows) {
       const valorFrete = parseFloat((row['Valor do Frete'] || '0').replace(/\./g, '').replace(',', '.')) || 0;
       const tipoFrete = (row['Tipo do Frete'] || '').trim();
       const ocorrencia = (row['Descricao da Ultima Ocorrencia'] || '').trim();
+      const codigoOcorrencia = (row['Codigo da Ultima Ocorrencia'] || '').trim();
       const serieNumeroCte = (row['Serie/Numero CT-e'] || '').trim();
       const numeroNotaFiscal = (row['Numero da Nota Fiscal'] || '').trim();
       const previsaoEntrega = parseBrDate(row['Previsao de Entrega']);
@@ -191,8 +192,9 @@ export async function importarSsw455(rows) {
           peso_real, volumes, valor_frete, tipo_frete,
           data_baixa, ocorrencia, controle_duplicidade,
           numero_nota_fiscal, previsao_entrega, data_ultima_ocorrencia,
-          cubagem_m3, tipo_baixa, valor_mercadoria, setor_destino
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+          cubagem_m3, tipo_baixa, valor_mercadoria, setor_destino,
+          codigo_ocorrencia
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
         ON CONFLICT ("controle_duplicidade") DO UPDATE SET
           unidade_receptora = EXCLUDED.unidade_receptora,
           ocorrencia = EXCLUDED.ocorrencia,
@@ -204,7 +206,8 @@ export async function importarSsw455(rows) {
           cubagem_m3 = EXCLUDED.cubagem_m3,
           tipo_baixa = EXCLUDED.tipo_baixa,
           valor_mercadoria = EXCLUDED.valor_mercadoria,
-          setor_destino = EXCLUDED.setor_destino
+          setor_destino = EXCLUDED.setor_destino,
+          codigo_ocorrencia = EXCLUDED.codigo_ocorrencia
       `, [
         ctrc, ctrcNormalizado, serieNumeroCte, dataEmissao,
         cnpjPagador, clientePagador, unidadeReceptora,
@@ -213,6 +216,7 @@ export async function importarSsw455(rows) {
         dataBaixa, ocorrencia, controleDuplicidade,
         numeroNotaFiscal, previsaoEntrega, dataUltimaOcorrencia,
         cubagemM3, tipoBaixa, valorMercadoria, setorDestino,
+        codigoOcorrencia,
       ]);
 
       if (cnpjPagador && !cnpjsVistos.has(cnpjPagador)) {

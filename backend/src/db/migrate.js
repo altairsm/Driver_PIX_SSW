@@ -408,6 +408,13 @@ export async function runMigrations() {
     }
     console.log('  -> ssw_455 (cubagem_m3, tipo_baixa, valor_mercadoria, setor_destino)');
 
+    for (const col of [
+      "ADD COLUMN IF NOT EXISTS codigo_ocorrencia VARCHAR(10)"
+    ]) {
+      await pool.query(`DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='ssw_455') THEN ALTER TABLE ssw_455 ${col}; END IF; END $$`);
+    }
+    console.log('  -> ssw_455 (codigo_ocorrencia)');
+
     await pool.query('CREATE INDEX IF NOT EXISTS idx_ssw_455_ctrc ON ssw_455 (ctrc_normalizado)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_ssw_455_pagador ON ssw_455 (cnpj_pagador)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_ssw_455_unidade ON ssw_455 (unidade_receptora)');

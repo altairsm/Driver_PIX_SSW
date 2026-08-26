@@ -298,8 +298,8 @@ export async function getCtrcsParadosDetalhado(unidade) {
       v.numero_nota_fiscal AS nf,
       c.ctrc,
       COALESCE(p.nome_simplificado, v.cliente_pagador, c.remetente) AS cliente_pagador,
-      c.data_emissao,
-      v.previsao_entrega,
+      to_char(c.data_emissao, 'YYYY-MM-DD') AS data_emissao,
+      to_char(v.previsao_entrega, 'YYYY-MM-DD') AS previsao_entrega,
       CASE
         WHEN v.previsao_entrega < CURRENT_DATE THEN 'Vencido'
         WHEN v.previsao_entrega = CURRENT_DATE THEN 'Vence hoje'
@@ -318,7 +318,8 @@ export async function getCtrcsParadosDetalhado(unidade) {
     FROM ssw_ctrcs c
     LEFT JOIN ssw_455 v ON REPLACE(c.ctrc, ' ', '') = v.ctrc_normalizado
     LEFT JOIN pagadores p ON p.cnpj = v.cnpj_pagador
-    LEFT JOIN ocorrencia_catalogo oc ON UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+    LEFT JOIN ocorrencia_catalogo oc ON oc.codigo = v.codigo_ocorrencia
+      OR (v.codigo_ocorrencia IS NULL AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%')
     WHERE NOT EXISTS (
       SELECT 1 FROM ocorrencia_catalogo oc2
       WHERE oc2.finalizadora = true

@@ -352,12 +352,13 @@ router.get('/expedicao', async (req, res) => {
         v.cubagem_m3,
         v.valor_mercadoria,
         v.setor_destino,
-        v.data_emissao,
+        to_char(v.data_emissao, 'YYYY-MM-DD') AS data_emissao,
         v.ocorrencia,
         COALESCE(oc.resumo, 'Na filial') AS resumo
       FROM ssw_455 v
       JOIN pagadores p ON p.cnpj = v.cnpj_pagador
-      LEFT JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+      LEFT JOIN ocorrencia_catalogo oc ON oc.codigo = v.codigo_ocorrencia
+        OR (v.codigo_ocorrencia IS NULL AND UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%')
       ${where}
       ORDER BY v.cliente_pagador, v.data_emissao
     `, params);
@@ -389,8 +390,8 @@ router.get('/gestao/export', async (req, res) => {
         v.ctrc,
         COALESCE(p.nome_simplificado, v.cliente_pagador) AS cliente_pagador,
         v.cidade_entrega,
-        v.data_emissao,
-        v.previsao_entrega,
+        to_char(v.data_emissao, 'YYYY-MM-DD') AS data_emissao,
+        to_char(v.previsao_entrega, 'YYYY-MM-DD') AS previsao_entrega,
         CASE
           WHEN v.previsao_entrega < CURRENT_DATE THEN 'Vencido'
           WHEN v.previsao_entrega = CURRENT_DATE THEN 'Vence hoje'
@@ -399,7 +400,7 @@ router.get('/gestao/export', async (req, res) => {
         COALESCE(oc.resumo, 'Na filial') AS resumo_ocorrencia,
         v.ocorrencia,
         v.unidade_receptora,
-        v.data_ultima_ocorrencia,
+        to_char(v.data_ultima_ocorrencia, 'YYYY-MM-DD') AS data_ultima_ocorrencia,
         v.numero_nota_fiscal,
         v.cubagem_m3,
         v.valor_mercadoria,
@@ -407,7 +408,8 @@ router.get('/gestao/export', async (req, res) => {
         v.tipo_baixa
       FROM ssw_455 v
       JOIN pagadores p ON p.cnpj = v.cnpj_pagador
-      LEFT JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+      LEFT JOIN ocorrencia_catalogo oc ON oc.codigo = v.codigo_ocorrencia
+        OR (v.codigo_ocorrencia IS NULL AND UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%')
       ${where}
       ORDER BY v.cliente_pagador,
         CASE
