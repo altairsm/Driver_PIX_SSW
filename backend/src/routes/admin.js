@@ -256,7 +256,8 @@ router.get('/gestao', async (req, res) => {
           COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Transferência')::int AS transferencia
         FROM ssw_455 v
         JOIN pagadores p ON p.cnpj = v.cnpj_pagador
-        LEFT JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+        LEFT JOIN ocorrencia_catalogo oc ON oc.codigo = v.codigo_ocorrencia
+          OR (v.codigo_ocorrencia IS NULL AND UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%')
         ${where}
         AND (oc.id IS NULL OR oc.finalizadora != true)
         GROUP BY 1, 2
@@ -275,7 +276,8 @@ router.get('/gestao', async (req, res) => {
         COUNT(*) FILTER (WHERE COALESCE(oc.resumo, 'Na filial') = 'Transferência')::int AS transferencia
       FROM ssw_455 v
       JOIN pagadores p ON p.cnpj = v.cnpj_pagador
-      LEFT JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+      LEFT JOIN ocorrencia_catalogo oc ON oc.codigo = v.codigo_ocorrencia
+        OR (v.codigo_ocorrencia IS NULL AND UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%')
       ${where}
       AND (oc.id IS NULL OR oc.finalizadora != true)
     `, params);
@@ -288,7 +290,7 @@ router.get('/gestao', async (req, res) => {
              COUNT(*)::int AS realizadas_hoje
       FROM ssw_455 v
       JOIN pagadores p ON p.cnpj = v.cnpj_pagador
-      JOIN ocorrencia_catalogo oc ON UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'
+      JOIN ocorrencia_catalogo oc ON (oc.codigo = v.codigo_ocorrencia OR (v.codigo_ocorrencia IS NULL AND UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'))
       ${whereHoje}
         AND oc.finalizadora = true
         AND oc.codigo = '1'
