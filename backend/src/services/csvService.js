@@ -174,7 +174,7 @@ export async function importarSsw455(rows) {
       const valorFrete = parseFloat((row['Valor do Frete'] || '0').replace(/\./g, '').replace(',', '.')) || 0;
       const tipoFrete = (row['Tipo do Frete'] || '').trim();
       const ocorrencia = (row['Descricao da Ultima Ocorrencia'] || '').trim();
-      const codigoOcorrencia = (row['Codigo da Ultima Ocorrencia'] || '').trim();
+      const codigoOcorrencia = (row['Codigo da Ultima Ocorrencia'] || '').trim().padStart(2, '0');
       const serieNumeroCte = (row['Serie/Numero CT-e'] || '').trim();
       const numeroNotaFiscal = (row['Numero da Nota Fiscal'] || '').trim();
       const previsaoEntrega = parseBrDate(row['Previsao de Entrega']);
@@ -197,17 +197,17 @@ export async function importarSsw455(rows) {
         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
         ON CONFLICT ("controle_duplicidade") DO UPDATE SET
           unidade_receptora = EXCLUDED.unidade_receptora,
-          ocorrencia = EXCLUDED.ocorrencia,
+          ocorrencia = CASE WHEN EXCLUDED.data_ultima_ocorrencia >= ssw_455.data_ultima_ocorrencia OR ssw_455.data_ultima_ocorrencia IS NULL THEN EXCLUDED.ocorrencia ELSE ssw_455.ocorrencia END,
           data_baixa = EXCLUDED.data_baixa,
           valor_frete = EXCLUDED.valor_frete,
           numero_nota_fiscal = EXCLUDED.numero_nota_fiscal,
           previsao_entrega = EXCLUDED.previsao_entrega,
-          data_ultima_ocorrencia = EXCLUDED.data_ultima_ocorrencia,
+          data_ultima_ocorrencia = CASE WHEN EXCLUDED.data_ultima_ocorrencia >= ssw_455.data_ultima_ocorrencia OR ssw_455.data_ultima_ocorrencia IS NULL THEN EXCLUDED.data_ultima_ocorrencia ELSE ssw_455.data_ultima_ocorrencia END,
           cubagem_m3 = EXCLUDED.cubagem_m3,
           tipo_baixa = EXCLUDED.tipo_baixa,
           valor_mercadoria = EXCLUDED.valor_mercadoria,
           setor_destino = EXCLUDED.setor_destino,
-          codigo_ocorrencia = EXCLUDED.codigo_ocorrencia
+          codigo_ocorrencia = CASE WHEN EXCLUDED.data_ultima_ocorrencia >= ssw_455.data_ultima_ocorrencia OR ssw_455.data_ultima_ocorrencia IS NULL THEN EXCLUDED.codigo_ocorrencia ELSE ssw_455.codigo_ocorrencia END
       `, [
         ctrc, ctrcNormalizado, serieNumeroCte, dataEmissao,
         cnpjPagador, clientePagador, unidadeReceptora,
@@ -263,7 +263,7 @@ export async function importarSsw930(rows) {
       const ctrcNormalizado = ctrc.replace(/\s+/g, '');
       const dataOcor = parseBrDate(row['DATA_OCOR']);
       const horaOcor = (row['HORA_OCOR'] || '').trim();
-      const codOcor = (row['COD_OCOR'] || '').trim();
+      const codOcor = (row['COD_OCOR'] || '').trim().padStart(2, '0');
       const descOcor = (row['DESCRICAO_OCOR'] || '').trim();
       const dataEntrega = parseBrDate(row['DATA_ENTREGA']);
       const cnpjPagador = (row['CNPJ_PAGADOR'] || '').replace(/\D/g, '');
@@ -297,6 +297,7 @@ export async function importarSsw930(rows) {
           data_ultima_ocorrencia = $2::date,
           codigo_ocorrencia = $3
         WHERE ctrc_normalizado = $4
+          AND ($2::date >= data_ultima_ocorrencia OR data_ultima_ocorrencia IS NULL)
       `, [info.descOcor, info.dataOcor, info.codOcor, ctrcNorm]);
 
       if (rowCount > 0) {

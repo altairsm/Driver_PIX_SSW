@@ -282,7 +282,9 @@ router.get('/gestao', async (req, res) => {
       AND (oc.id IS NULL OR oc.finalizadora != true)
     `, params);
 
-    const whereHoje = unidade ? `WHERE p.ativo = true AND v.previsao_entrega IS NOT NULL AND v.unidade_receptora = $1` : `WHERE p.ativo = true AND v.previsao_entrega IS NOT NULL`;
+    const whereHoje = unidade
+      ? `WHERE p.ativo = true AND v.previsao_entrega IS NOT NULL AND v.unidade_receptora = $1`
+      : `WHERE p.ativo = true AND v.previsao_entrega IS NOT NULL`;
     const paramsHoje = unidade ? [unidade] : [];
 
     const { rows: realizadasRows } = await pool.query(`
@@ -290,25 +292,81 @@ router.get('/gestao', async (req, res) => {
              COUNT(*)::int AS realizadas_hoje
       FROM ssw_455 v
       JOIN pagadores p ON p.cnpj = v.cnpj_pagador
-      JOIN ocorrencia_catalogo oc ON (oc.codigo = v.codigo_ocorrencia OR (v.codigo_ocorrencia IS NULL AND UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'))
       ${whereHoje}
-        AND oc.finalizadora = true
-        AND oc.codigo = '1'
+        AND (
+          v.codigo_ocorrencia = '01'
+          OR (v.codigo_ocorrencia IS NULL AND UPPER(v.ocorrencia) LIKE 'MERCADORIA ENTREGUE%')
+        )
         AND v.data_ultima_ocorrencia = CURRENT_DATE
       GROUP BY 1
     `, paramsHoje);
 
-    const realizadasMap = {};
-    realizadasRows.forEach(r => { realizadasMap[r.cliente] = r.realizadas_hoje; });
+    const realizadasPorCliente = {};
+    realizadasRows.forEach(r => { realizadasPorCliente[r.cliente] = r.realizadas_hoje; });
+    const realizadasTotal = realizadasRows.reduce((s, r) => s + r.realizadas_hoje, 0);
 
-    dados.forEach(row => { row.realizadas_hoje = realizadasMap[row.cliente] || 0; });
-
-    totais.realizadas_hoje = realizadasRows.reduce((s, r) => s + r.realizadas_hoje, 0);
-
-    res.json({ dados, totais: totais || {} });
+    res.json({ dados, totais: totais || {}, realizadas_hoje: { por_cliente: realizadasPorCliente, total: realizadasTotal } });
   } catch (err) {
     console.error('Erro ao buscar dados da gestão:', err);
     res.status(500).json({ error: 'Erro ao buscar dados da gestão' });
+  }
+});
+
+router.get('/gestao/detalhe', async (req, res) => {
+  try {
+    const { cliente, status_prazo, resumo, inicio, fim, unidade } = req.query;
+    const params = [];
+    const conditions = ['p.ativo = true'];
+
+    if (inicio) { params.push(inicio); conditions.push(`v.data_emissao >= $${params.length}::date`); }
+    if (fim) { params.push(fim); conditions.push(`v.data_emissao <= $${params.length}::date`); }
+    if (unidade) { params.push(unidade); conditions.push(`v.unidade_receptora = $${params.length}`); }
+    if (cliente) { params.push(cliente); conditions.push(`COALESCE(p.nome_simplificado, v.cliente_pagador) = $${params.length}`); }
+
+    conditions.push('v.previsao_entrega IS NOT NULL');
+    conditions.push('(oc.id IS NULL OR oc.finalizadora != true)');
+
+    if (status_prazo) {
+      if (status_prazo === 'Vencido') conditions.push(`v.previsao_entrega < CURRENT_DATE`);
+      else if (status_prazo === 'Vence hoje') conditions.push(`v.previsao_entrega = CURRENT_DATE`);
+      else if (status_prazo === 'A Vencer') conditions.push(`v.previsao_entrega > CURRENT_DATE`);
+    }
+
+    if (resumo) {
+      params.push(resumo);
+      conditions.push(`COALESCE(oc.resumo, 'Na filial') = $${params.length}`);
+    }
+
+    const where = `WHERE ${conditions.join(' AND ')}`;
+
+    const { rows } = await pool.query(`
+      SELECT
+        v.ctrc,
+        v.numero_nota_fiscal,
+        COALESCE(p.nome_simplificado, v.cliente_pagador) AS cliente_pagador,
+        to_char(v.data_emissao, 'YYYY-MM-DD') AS data_emissao,
+        to_char(v.previsao_entrega, 'YYYY-MM-DD') AS previsao_entrega,
+        CASE
+          WHEN v.previsao_entrega < CURRENT_DATE THEN 'Vencido'
+          WHEN v.previsao_entrega = CURRENT_DATE THEN 'Vence hoje'
+          ELSE 'A Vencer'
+        END AS status_prazo,
+        COALESCE(oc.resumo, 'Na filial') AS resumo_ocorrencia,
+        v.cidade_entrega,
+        v.unidade_receptora,
+        v.ocorrencia
+      FROM ssw_455 v
+      JOIN pagadores p ON p.cnpj = v.cnpj_pagador
+      LEFT JOIN ocorrencia_catalogo oc ON oc.codigo = v.codigo_ocorrencia
+        OR (v.codigo_ocorrencia IS NULL AND UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%')
+      ${where}
+      ORDER BY v.previsao_entrega
+    `, params);
+
+    res.json(rows);
+  } catch (err) {
+    console.error('Erro ao buscar detalhe da gestão:', err);
+    res.status(500).json({ error: 'Erro ao buscar detalhe' });
   }
 });
 
@@ -369,6 +427,44 @@ router.get('/expedicao', async (req, res) => {
   } catch (err) {
     console.error('Erro ao buscar expedição:', err);
     res.status(500).json({ error: 'Erro ao buscar dados de expedição' });
+  }
+});
+
+router.get('/expedicao-agrupada', async (req, res) => {
+  try {
+    const { unidade } = req.query;
+    const params = [];
+    const conditions = [];
+
+    if (unidade) { params.push(unidade); conditions.push(`v.unidade_receptora = $${params.length}`); }
+    conditions.push('(oc.id IS NULL OR oc.resumo IS NULL OR oc.resumo != \'Em rota\')');
+    conditions.push('(oc.id IS NULL OR oc.finalizadora != true)');
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const { rows } = await pool.query(`
+      SELECT
+        COALESCE(p.nome_simplificado, v.cliente_pagador) AS cliente_pagador,
+        v.setor_destino,
+        v.cidade_entrega,
+        COUNT(*)::int AS total_ctes,
+        COALESCE(SUM(v.cubagem_m3), 0)::numeric(10,3) AS total_cubagem,
+        COALESCE(SUM(v.peso_real), 0)::numeric(10,3) AS total_peso,
+        COALESCE(SUM(v.valor_mercadoria), 0)::numeric(12,2) AS total_valor_mercadoria,
+        CEIL(COALESCE(SUM(v.cubagem_m3), 0) / 20.0)::int AS carros_necessarios
+      FROM ssw_455 v
+      JOIN pagadores p ON p.cnpj = v.cnpj_pagador
+      LEFT JOIN ocorrencia_catalogo oc ON oc.codigo = v.codigo_ocorrencia
+        OR (v.codigo_ocorrencia IS NULL AND UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%')
+      ${where}
+      GROUP BY COALESCE(p.nome_simplificado, v.cliente_pagador), v.setor_destino, v.cidade_entrega
+      ORDER BY total_cubagem DESC
+    `, params);
+
+    res.json(rows);
+  } catch (err) {
+    console.error('Erro ao buscar expedição agrupada:', err);
+    res.status(500).json({ error: 'Erro ao buscar dados de expedição agrupada' });
   }
 });
 

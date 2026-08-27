@@ -345,6 +345,18 @@ export async function getGestao(inicio, fim, unidade) {
   return data;
 }
 
+export async function getGestaoDetalhe(cliente, status_prazo, resumo, inicio, fim, unidade) {
+  const params = {};
+  if (cliente) params.cliente = cliente;
+  if (status_prazo) params.status_prazo = status_prazo;
+  if (resumo) params.resumo = resumo;
+  if (inicio) params.inicio = inicio;
+  if (fim) params.fim = fim;
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/gestao/detalhe', { params });
+  return data;
+}
+
 export async function exportGestao(inicio, fim, unidade) {
   const params = {};
   if (inicio) params.inicio = inicio;
@@ -358,6 +370,13 @@ export async function getExpedicao(unidade) {
   const params = {};
   if (unidade) params.unidade = unidade;
   const { data } = await api.get('/admin/expedicao', { params });
+  return data;
+}
+
+export async function getExpedicaoAgrupada(unidade) {
+  const params = {};
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/expedicao-agrupada', { params });
   return data;
 }
 
