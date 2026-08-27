@@ -1,18 +1,23 @@
 import { useState, useRef } from 'react';
-import { uploadSswCsv, uploadSsw455 } from '../services/api';
+import { uploadSswCsv, uploadSsw455, uploadSsw930 } from '../services/api';
 import Topbar from '../components/Topbar';
 
 export default function AdminSswUpload() {
   const [file036, setFile036] = useState(null);
   const [file455, setFile455] = useState(null);
+  const [file930, setFile930] = useState(null);
   const [result036, setResult036] = useState(null);
   const [result455, setResult455] = useState(null);
+  const [result930, setResult930] = useState(null);
   const [loading, setLoading] = useState('');
   const [error, setError] = useState('');
   const [preview036, setPreview036] = useState(null);
   const [preview455, setPreview455] = useState(null);
+  const [preview930, setPreview930] = useState(null);
+  const [showNaoEncontrados, setShowNaoEncontrados] = useState(false);
   const input036Ref = useRef(null);
   const input455Ref = useRef(null);
+  const input930Ref = useRef(null);
 
   const handleFile = async (e, tipo) => {
     const selected = e.target.files[0];
@@ -20,9 +25,13 @@ export default function AdminSswUpload() {
     if (tipo === '036') {
       setFile036(selected);
       setResult036(null);
-    } else {
+    } else if (tipo === '455') {
       setFile455(selected);
       setResult455(null);
+    } else {
+      setFile930(selected);
+      setResult930(null);
+      setShowNaoEncontrados(false);
     }
     setError('');
 
@@ -33,13 +42,14 @@ export default function AdminSswUpload() {
       const cols = lines[1] ? lines[1].split(';').map(c => c.trim()) : [];
       const preview = { total_linhas: text.split('\n').length, colunas: cols, amostra: lines.slice(2, 5).map(l => l.split(';')) };
       if (tipo === '036') setPreview036(preview);
-      else setPreview455(preview);
+      else if (tipo === '455') setPreview455(preview);
+      else setPreview930(preview);
     };
     reader.readAsText(selected.slice(0, 50000));
   };
 
   const handleUpload = async (tipo) => {
-    const file = tipo === '036' ? file036 : file455;
+    const file = tipo === '036' ? file036 : tipo === '455' ? file455 : file930;
     if (!file) return;
     setLoading(tipo);
     setError('');
@@ -47,6 +57,8 @@ export default function AdminSswUpload() {
       let data;
       if (tipo === '455') {
         data = await uploadSsw455(file);
+      } else if (tipo === '930') {
+        data = await uploadSsw930(file);
       } else {
         data = await uploadSswCsv(file, tipo);
       }
@@ -55,11 +67,17 @@ export default function AdminSswUpload() {
         setFile036(null);
         setPreview036(null);
         if (input036Ref.current) input036Ref.current.value = '';
-      } else {
+      } else if (tipo === '455') {
         setResult455(data);
         setFile455(null);
         setPreview455(null);
         if (input455Ref.current) input455Ref.current.value = '';
+      } else {
+        setResult930(data);
+        setFile930(null);
+        setPreview930(null);
+        setShowNaoEncontrados(false);
+        if (input930Ref.current) input930Ref.current.value = '';
       }
     } catch (err) {
       const msg = err.response?.data?.error || err.message || 'Erro ao importar arquivo';
@@ -68,6 +86,12 @@ export default function AdminSswUpload() {
     } finally {
       setLoading('');
     }
+  };
+
+  const copiarNaoEncontrados = () => {
+    if (!result930?.nao_encontrados) return;
+    const texto = result930.nao_encontrados.map(n => n.ctrc).join('\n');
+    navigator.clipboard.writeText(texto);
   };
 
   return (
@@ -152,6 +176,77 @@ export default function AdminSswUpload() {
                   <span>{result455.importados} CT-e's importados</span>
                   <span>{result455.atualizados_ctrcs} CTRCs atualizados com unidade</span>
                 </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={styles.card}>
+          <div style={styles.cardHeader}>SSW 930 — Atualizar Ocorrências</div>
+          <div style={styles.cardBody}>
+            <p style={styles.desc}>Atualiza a última ocorrência dos CT-e's já importados no 455. Não armazena o arquivo — apenas usa para cruzamento. CTRCs ausentes no 455 são listados para importação posterior.</p>
+            <label style={styles.uploadZone}>
+              <input ref={input930Ref} type="file" accept=".csv" onChange={(e) => handleFile(e, '930')} style={{ display: 'none' }} />
+              <div style={styles.uploadPlaceholder}>
+                {file930 ? <span style={{ color: '#3de8a0' }}>{file930.name}</span> : 'Selecionar CSV 930'}
+              </div>
+            </label>
+
+            {preview930 && !result930 && (
+              <div style={styles.preview}>
+                <div style={styles.previewTitle}>Preview — {preview930.total_linhas} linhas</div>
+                <div style={styles.colList}>
+                  {preview930.colunas.slice(0, 10).map((col, i) => (
+                    <span key={i} style={styles.colTag}>{col}</span>
+                  ))}
+                  {preview930.colunas.length > 10 && <span style={styles.colTag}>+{preview930.colunas.length - 10}</span>}
+                </div>
+                <button onClick={() => handleUpload('930')} disabled={loading === '930'} style={styles.importBtn}>
+                  {loading === '930' ? 'Importando...' : 'Importar SSW 930'}
+                </button>
+              </div>
+            )}
+
+            {result930 && (
+              <div style={styles.resultCard}>
+                <div style={styles.resultTitle}>✓ Processado</div>
+                <div style={styles.resultDetails}>
+                  <span>{result930.total_lidos} linhas</span>
+                  <span>{result930.atualizados} CTRCs atualizados</span>
+                  <span>{result930.nao_encontrados?.length || 0} não encontrados no 455</span>
+                </div>
+                {result930.nao_encontrados?.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <button
+                      onClick={() => setShowNaoEncontrados(!showNaoEncontrados)}
+                      style={{ ...styles.importBtn, background: '#f59e0b', fontSize: '0.75rem', padding: '6px 16px' }}
+                    >
+                      {showNaoEncontrados ? 'Ocultar' : 'Ver'} {result930.nao_encontrados.length} CTRCs não encontrados
+                    </button>
+                    {showNaoEncontrados && (
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <span style={{ fontSize: '0.7rem', color: '#9ca3af', fontFamily: "'IBM Plex Mono', monospace" }}>
+                            Importe o SSW 455 para incluí-los
+                          </span>
+                          <button
+                            onClick={copiarNaoEncontrados}
+                            style={{ ...styles.importBtn, background: '#3b82f6', fontSize: '0.65rem', padding: '4px 12px' }}
+                          >
+                            Copiar lista
+                          </button>
+                        </div>
+                        <div style={{ maxHeight: 200, overflow: 'auto', background: '#0d0f14', borderRadius: 4, padding: 8, border: '1px solid #2a2f3e' }}>
+                          {result930.nao_encontrados.map((n, i) => (
+                            <div key={i} style={{ fontSize: '0.7rem', color: '#f87171', fontFamily: "'IBM Plex Mono', monospace", padding: '2px 0' }}>
+                              {n.ctrc} <span style={{ color: '#6b7280' }}>({n.cliente_pagador})</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

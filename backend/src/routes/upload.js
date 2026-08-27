@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { parseCSV, importarSsw036, importarSsw455 } from '../services/csvService.js';
+import { parseCSV, importarSsw036, importarSsw455, importarSsw930 } from '../services/csvService.js';
 
 const uploadDir = path.resolve('uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -72,6 +72,28 @@ router.post('/ssw-455', upload.single('file'), async (req, res) => {
     });
   } catch (err) {
     console.error('Erro ao processar CSV 455:', err);
+    res.status(500).json({ error: `Erro ao processar arquivo: ${err.message}` });
+  }
+});
+
+router.post('/ssw-930', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    }
+
+    const rows = parseCSV(req.file.path, 1);
+    const result = await importarSsw930(rows);
+
+    fs.unlink(req.file.path, () => {});
+
+    res.json({
+      success: true,
+      total_lidos: rows.length,
+      ...result,
+    });
+  } catch (err) {
+    console.error('Erro ao processar CSV 930:', err);
     res.status(500).json({ error: `Erro ao processar arquivo: ${err.message}` });
   }
 });

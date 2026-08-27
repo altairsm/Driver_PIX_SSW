@@ -248,3 +248,67 @@ export async function importarSsw455(rows) {
 
   return { importados, erros, atualizados_ctrcs, pagadores_cadastrados };
 }
+
+export async function importarSsw930(rows) {
+  let atualizados = 0;
+  let erros = 0;
+  const naoEncontrados = [];
+  const ctrcsVistos = new Map();
+
+  for (const row of rows) {
+    try {
+      const ctrc = (row['CTRC'] || '').trim();
+      if (!ctrc) { erros++; continue; }
+
+      const ctrcNormalizado = ctrc.replace(/\s+/g, '');
+      const dataOcor = parseBrDate(row['DATA_OCOR']);
+      const horaOcor = (row['HORA_OCOR'] || '').trim();
+      const codOcor = (row['COD_OCOR'] || '').trim();
+      const descOcor = (row['DESCRICAO_OCOR'] || '').trim();
+      const dataEntrega = parseBrDate(row['DATA_ENTREGA']);
+      const cnpjPagador = (row['CNPJ_PAGADOR'] || '').replace(/\D/g, '');
+      const nomePagador = (row['NOME_PAGADOR'] || '').trim();
+
+      if (!dataOcor) { erros++; continue; }
+
+      const chave = `${ctrcNormalizado}|${dataOcor}|${horaOcor}`;
+      const existente = ctrcsVistos.get(ctrcNormalizado);
+
+      if (existente) {
+        const cmpData = dataOcor.localeCompare(existente.dataOcor);
+        const cmpHora = horaOcor.localeCompare(existente.horaOcor);
+        if (cmpData > 0 || (cmpData === 0 && cmpHora > 0)) {
+          ctrcsVistos.set(ctrcNormalizado, { dataOcor, horaOcor, codOcor, descOcor, dataEntrega, cnpjPagador, nomePagador, ctrc });
+        }
+      } else {
+        ctrcsVistos.set(ctrcNormalizado, { dataOcor, horaOcor, codOcor, descOcor, dataEntrega, cnpjPagador, nomePagador, ctrc });
+      }
+    } catch (err) {
+      console.error('Erro ao processar linha SSW 930:', err.message);
+      erros++;
+    }
+  }
+
+  for (const [ctrcNorm, info] of ctrcsVistos) {
+    try {
+      const { rowCount } = await pool.query(`
+        UPDATE ssw_455 SET
+          ocorrencia = $1,
+          data_ultima_ocorrencia = $2::date,
+          codigo_ocorrencia = $3
+        WHERE ctrc_normalizado = $4
+      `, [info.descOcor, info.dataOcor, info.codOcor, ctrcNorm]);
+
+      if (rowCount > 0) {
+        atualizados++;
+      } else {
+        naoEncontrados.push({ ctrc: info.ctrc, cnpj_pagador: info.cnpjPagador, cliente_pagador: info.nomePagador });
+      }
+    } catch (err) {
+      console.error(`Erro ao atualizar CTRC ${ctrcNorm}:`, err.message);
+      erros++;
+    }
+  }
+
+  return { atualizados, erros, nao_encontrados: naoEncontrados };
+}
