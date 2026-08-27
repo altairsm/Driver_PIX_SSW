@@ -415,7 +415,6 @@ export default function AdminDashboard() {
                       <table style={s.table}>
                         <thead>
                           <tr>
-                            <th style={s.th}>Cliente</th>
                             <th style={s.th}>Setor Destino</th>
                             <th style={{ ...s.th, textAlign: 'right' }}>CT-e's</th>
                             <th style={{ ...s.th, textAlign: 'right' }}>Cubagem (m³)</th>
@@ -430,7 +429,6 @@ export default function AdminDashboard() {
                             const carrosColor = carros >= 5 ? '#ff5a5a' : carros >= 3 ? '#f0c040' : '#3de8a0';
                             return (
                               <tr key={i}>
-                                <td style={s.td}>{r.cliente_pagador}</td>
                                 <td style={s.td}>{r.setor_destino || '—'}</td>
                                 <td style={{ ...s.td, textAlign: 'right', fontWeight: 600 }}>{r.total_ctes}</td>
                                 <td style={{ ...s.td, textAlign: 'right', color: '#0d6efd', fontWeight: 600 }}>{Number(r.total_cubagem).toFixed(3)}</td>
@@ -447,7 +445,7 @@ export default function AdminDashboard() {
                         </tbody>
                         <tfoot>
                           <tr>
-                            <td style={{ ...s.td, fontWeight: 700, color: '#f0c040' }} colSpan={2}>TOTAL GERAL</td>
+                            <td style={{ ...s.td, fontWeight: 700, color: '#f0c040' }}>TOTAL GERAL</td>
                             <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#3de8a0' }}>{expedicaoAgrupada.reduce((s, r) => s + r.total_ctes, 0)}</td>
                             <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#0d6efd' }}>{expedicaoAgrupada.reduce((s, r) => s + Number(r.total_cubagem), 0).toFixed(3)}</td>
                             <td style={{ ...s.td, textAlign: 'right', fontWeight: 700 }}>{expedicaoAgrupada.reduce((s, r) => s + Number(r.total_peso), 0).toFixed(3)}</td>
