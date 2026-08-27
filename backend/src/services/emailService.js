@@ -52,6 +52,11 @@ export async function enviarSenhaPorEmail(email, nome, senha) {
           <p style="margin: 5px 0;"><strong>E-mail:</strong> ${email}</p>
           <p style="margin: 5px 0;"><strong>Senha:</strong> ${senha}</p>
         </div>
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="https://driverfds.intuitiva.log.br" style="display: inline-block; background: #f0c040; color: #0d0f14; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px;">
+            Acessar o Sistema
+          </a>
+        </div>
         <p style="color: #666; font-size: 12px;">
           Recomendamos alterar sua senha após o primeiro acesso.
         </p>

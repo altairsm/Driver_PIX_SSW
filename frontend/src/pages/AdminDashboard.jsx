@@ -7,8 +7,10 @@ import Topbar from '../components/Topbar';
 export default function AdminDashboard() {
   const defaultInicio = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
   const defaultFim = new Date().toISOString().slice(0, 10);
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isLocked = user.role !== 'admin' && user.unidade;
 
-  const [filtro, setFiltro] = useState({ inicio: defaultInicio, fim: defaultFim, tipo: '', unidade: '' });
+  const [filtro, setFiltro] = useState({ inicio: defaultInicio, fim: defaultFim, tipo: '', unidade: isLocked ? user.unidade : '' });
   const [unidades, setUnidades] = useState([]);
   const [eficiencia, setEficiencia] = useState([]);
   const [appUsage, setAppUsage] = useState([]);
@@ -163,9 +165,9 @@ export default function AdminDashboard() {
           </div>
           <div style={s.filterGroup}>
             <label style={s.filterLabel}>Unidade</label>
-            <select style={s.filterInput} value={filtro.unidade}
-              onChange={(e) => setFiltro({ ...filtro, unidade: e.target.value })}>
-              <option value="">Todas</option>
+            <select style={{ ...s.filterInput, ...(isLocked ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }} value={filtro.unidade}
+              onChange={(e) => setFiltro({ ...filtro, unidade: e.target.value })} disabled={isLocked}>
+              {!isLocked && <option value="">Todas</option>}
               {unidades.map(u => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
@@ -415,7 +417,6 @@ export default function AdminDashboard() {
                           <tr>
                             <th style={s.th}>Cliente</th>
                             <th style={s.th}>Setor Destino</th>
-                            <th style={s.th}>Cidade</th>
                             <th style={{ ...s.th, textAlign: 'right' }}>CT-e's</th>
                             <th style={{ ...s.th, textAlign: 'right' }}>Cubagem (m³)</th>
                             <th style={{ ...s.th, textAlign: 'right' }}>Peso (kg)</th>
@@ -431,7 +432,6 @@ export default function AdminDashboard() {
                               <tr key={i}>
                                 <td style={s.td}>{r.cliente_pagador}</td>
                                 <td style={s.td}>{r.setor_destino || '—'}</td>
-                                <td style={s.td}>{r.cidade_entrega || '—'}</td>
                                 <td style={{ ...s.td, textAlign: 'right', fontWeight: 600 }}>{r.total_ctes}</td>
                                 <td style={{ ...s.td, textAlign: 'right', color: '#0d6efd', fontWeight: 600 }}>{Number(r.total_cubagem).toFixed(3)}</td>
                                 <td style={{ ...s.td, textAlign: 'right', fontWeight: 600 }}>{Number(r.total_peso).toFixed(3)}</td>
@@ -447,7 +447,7 @@ export default function AdminDashboard() {
                         </tbody>
                         <tfoot>
                           <tr>
-                            <td style={{ ...s.td, fontWeight: 700, color: '#f0c040' }} colSpan={3}>TOTAL GERAL</td>
+                            <td style={{ ...s.td, fontWeight: 700, color: '#f0c040' }} colSpan={2}>TOTAL GERAL</td>
                             <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#3de8a0' }}>{expedicaoAgrupada.reduce((s, r) => s + r.total_ctes, 0)}</td>
                             <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#0d6efd' }}>{expedicaoAgrupada.reduce((s, r) => s + Number(r.total_cubagem), 0).toFixed(3)}</td>
                             <td style={{ ...s.td, textAlign: 'right', fontWeight: 700 }}>{expedicaoAgrupada.reduce((s, r) => s + Number(r.total_peso), 0).toFixed(3)}</td>

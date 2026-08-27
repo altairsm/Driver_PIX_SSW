@@ -16,6 +16,7 @@ const RESUMO_BG = { em_rota: 'rgba(96,165,250,0.12)', na_filial: 'rgba(240,192,6
 
 export default function AdminGestao() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isLocked = user.role !== 'admin' && user.unidade;
   const [dados, setDados] = useState([]);
   const [realizadasHoje, setRealizadasHoje] = useState({ por_cliente: {}, total: 0 });
   const [unidades, setUnidades] = useState([]);
@@ -25,7 +26,7 @@ export default function AdminGestao() {
   const [filtro, setFiltro] = useState({
     inicio: new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10),
     fim: new Date().toISOString().slice(0, 10),
-    unidade: '',
+    unidade: isLocked ? user.unidade : '',
   });
   const [modal, setModal] = useState({ aberto: false, cliente: '', resumo: '', dados: [], carregando: false });
 
@@ -152,12 +153,12 @@ export default function AdminGestao() {
     const realizadasCliente = realizadasHoje.por_cliente[nome] || 0;
     return (
       <div style={s.card}>
-        <div style={s.cardHeader}>
-          <div style={s.cardTitle}>{nome}</div>
-          <div style={s.statsRowSmall}>
-            <span style={{ ...s.statSmall, color: '#3de8a0' }}>✅ {fmtBig(realizadasCliente)}</span>
-            <span style={{ ...s.statSmall, color: '#f0c040' }}>⏳ {fmtBig(totalAll)}</span>
-          </div>
+        <div style={{ ...s.cardHeader, justifyContent: 'center' }}>
+          <div style={{ ...s.cardTitle, textAlign: 'center', flex: 1 }}>{nome}</div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 16, padding: '6px 16px', background: '#161920', borderBottom: '1px solid #2a2f3e' }}>
+          <span style={{ ...s.statSmall, color: '#3de8a0' }}>✅ {fmtBig(realizadasCliente)} realizadas hoje</span>
+          <span style={{ ...s.statSmall, color: '#f0c040' }}>⏳ {fmtBig(totalAll)} pendentes</span>
         </div>
         <div style={s.statusGrid}>
           {STATUS_ORDER.map(st => {
@@ -201,8 +202,8 @@ export default function AdminGestao() {
           </div>
           <div style={s.filterGroup}>
             <label style={s.filterLabel}>Unidade</label>
-            <select style={s.filterInput} value={filtro.unidade} onChange={(e) => setFiltro({ ...filtro, unidade: e.target.value })}>
-              <option value="">Todas</option>
+            <select style={{ ...s.filterInput, ...(isLocked ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }} value={filtro.unidade} onChange={(e) => setFiltro({ ...filtro, unidade: e.target.value })} disabled={isLocked}>
+              {!isLocked && <option value="">Todas</option>}
               {unidades.map(u => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>

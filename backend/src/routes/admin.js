@@ -446,7 +446,6 @@ router.get('/expedicao-agrupada', async (req, res) => {
       SELECT
         COALESCE(p.nome_simplificado, v.cliente_pagador) AS cliente_pagador,
         v.setor_destino,
-        v.cidade_entrega,
         COUNT(*)::int AS total_ctes,
         COALESCE(SUM(v.cubagem_m3), 0)::numeric(10,3) AS total_cubagem,
         COALESCE(SUM(v.peso_real), 0)::numeric(10,3) AS total_peso,
@@ -457,7 +456,7 @@ router.get('/expedicao-agrupada', async (req, res) => {
       LEFT JOIN ocorrencia_catalogo oc ON oc.codigo = v.codigo_ocorrencia
         OR (v.codigo_ocorrencia IS NULL AND UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%')
       ${where}
-      GROUP BY COALESCE(p.nome_simplificado, v.cliente_pagador), v.setor_destino, v.cidade_entrega
+      GROUP BY COALESCE(p.nome_simplificado, v.cliente_pagador), v.setor_destino
       ORDER BY total_cubagem DESC
     `, params);
 
