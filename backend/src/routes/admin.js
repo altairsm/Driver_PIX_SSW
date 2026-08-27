@@ -398,6 +398,7 @@ router.get('/expedicao', async (req, res) => {
     const conditions = [];
 
     if (unidade) { params.push(unidade); conditions.push(`v.unidade_receptora = $${params.length}`); }
+    conditions.push('p.ativo = true');
     conditions.push('(oc.id IS NULL OR oc.resumo IS NULL OR oc.resumo != \'Em rota\')');
     conditions.push('(oc.id IS NULL OR oc.finalizadora != true)');
 

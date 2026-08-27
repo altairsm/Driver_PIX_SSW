@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { getGestao, getGestaoDetalhe, getUnidades, exportGestao } from '../services/api';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { getGestao, getGestaoDetalhe, exportGestao } from '../services/api';
 import * as XLSX from 'xlsx';
-import Topbar from '../components/Topbar';
+import Topbar, { UNIDADE_STORAGE_KEY } from '../components/Topbar';
 
 const STATUS_ORDER = ['A Vencer', 'Vence hoje', 'Vencido'];
 const STATUS_COLORS = {
@@ -16,37 +16,52 @@ const RESUMO_BG = { em_rota: 'rgba(96,165,250,0.12)', na_filial: 'rgba(240,192,6
 
 export default function AdminGestao() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const isLocked = user.role !== 'admin' && user.unidade;
+  const isLocked = user.role !== 'admin' && Boolean(user.unidade);
   const [dados, setDados] = useState([]);
   const [realizadasHoje, setRealizadasHoje] = useState({ por_cliente: {}, total: 0 });
-  const [unidades, setUnidades] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [exportando, setExportando] = useState(false);
   const [filtro, setFiltro] = useState({
     inicio: new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10),
     fim: new Date().toISOString().slice(0, 10),
-    unidade: isLocked ? user.unidade : '',
+    unidade: isLocked ? user.unidade : localStorage.getItem(UNIDADE_STORAGE_KEY) || '',
   });
+  const filtroRef = useRef(filtro);
   const [modal, setModal] = useState({ aberto: false, cliente: '', resumo: '', dados: [], carregando: false });
 
-  const carregar = async () => {
+  const carregar = useCallback(async (f = filtroRef.current) => {
     setLoading(true); setError('');
     try {
-      const [gestao, units] = await Promise.all([
-        getGestao(filtro.inicio || null, filtro.fim || null, filtro.unidade || null),
-        getUnidades(),
-      ]);
+      const gestao = await getGestao(f.inicio || null, f.fim || null, f.unidade || null);
       setDados(gestao.dados || []);
       setRealizadasHoje(gestao.realizadas_hoje || { por_cliente: {}, total: 0 });
-      setUnidades(units || []);
     } catch { setError('Erro ao carregar dados'); setDados([]); }
     finally { setLoading(false); }
-  };
+  }, []);
 
-  useEffect(() => { carregar(); }, []);
+  useEffect(() => {
+    filtroRef.current = filtro;
+  }, [filtro]);
 
-  const handleFiltrar = (e) => { e.preventDefault(); carregar(); };
+  useEffect(() => { carregar(filtroRef.current); }, [carregar]);
+
+  useEffect(() => {
+    const handleUnidadeChange = () => {
+      const unidade = isLocked
+        ? user.unidade
+        : localStorage.getItem(UNIDADE_STORAGE_KEY) || '';
+      const nextFiltro = { ...filtroRef.current, unidade };
+      filtroRef.current = nextFiltro;
+      setFiltro(nextFiltro);
+      carregar(nextFiltro);
+    };
+
+    window.addEventListener('unidadeChange', handleUnidadeChange);
+    return () => window.removeEventListener('unidadeChange', handleUnidadeChange);
+  }, [carregar, isLocked, user.unidade]);
+
+  const handleFiltrar = (e) => { e.preventDefault(); carregar(filtro); };
 
   const handleExportar = async () => {
     setExportando(true);
@@ -199,13 +214,6 @@ export default function AdminGestao() {
           <div style={s.filterGroup}>
             <label style={s.filterLabel}>Fim</label>
             <input type="date" style={s.filterInput} value={filtro.fim} onChange={(e) => setFiltro({ ...filtro, fim: e.target.value })} />
-          </div>
-          <div style={s.filterGroup}>
-            <label style={s.filterLabel}>Unidade</label>
-            <select style={{ ...s.filterInput, ...(isLocked ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }} value={filtro.unidade} onChange={(e) => setFiltro({ ...filtro, unidade: e.target.value })} disabled={isLocked}>
-              {!isLocked && <option value="">Todas</option>}
-              {unidades.map(u => <option key={u} value={u}>{u}</option>)}
-            </select>
           </div>
           <button type="submit" style={s.filterBtn} disabled={loading}>{loading ? 'Carregando...' : 'Filtrar'}</button>
           <button type="button" style={{ ...s.filterBtn, background: '#198754', color: '#fff' }} onClick={handleExportar} disabled={exportando || loading}>

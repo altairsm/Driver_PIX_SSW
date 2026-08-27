@@ -1,17 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getEficienciaMotoristas, getAppUsageMotoristas, getCtrcsParados, getCtrcsParadosDetalhado, getExpedicao, getExpedicaoAgrupada } from '../services/api';
-import api from '../services/api';
 import * as XLSX from 'xlsx';
-import Topbar from '../components/Topbar';
+import Topbar, { UNIDADE_STORAGE_KEY } from '../components/Topbar';
 
 export default function AdminDashboard() {
   const defaultInicio = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
   const defaultFim = new Date().toISOString().slice(0, 10);
   const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const isLocked = user.role !== 'admin' && user.unidade;
+  const isLocked = user.role !== 'admin' && Boolean(user.unidade);
 
-  const [filtro, setFiltro] = useState({ inicio: defaultInicio, fim: defaultFim, tipo: '', unidade: isLocked ? user.unidade : '' });
-  const [unidades, setUnidades] = useState([]);
+  const [filtro, setFiltro] = useState({
+    inicio: defaultInicio,
+    fim: defaultFim,
+    tipo: '',
+    unidade: isLocked ? user.unidade : localStorage.getItem(UNIDADE_STORAGE_KEY) || '',
+  });
+  const filtroRef = useRef(filtro);
   const [eficiencia, setEficiencia] = useState([]);
   const [appUsage, setAppUsage] = useState([]);
   const [ctrcsParados, setCtrcsParados] = useState([]);
@@ -22,7 +26,7 @@ export default function AdminDashboard() {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('eficiencia');
 
-  const carregar = async (f) => {
+  const carregar = useCallback(async (f = filtroRef.current) => {
     setLoading(true);
     setError('');
     try {
@@ -47,12 +51,30 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    carregar(filtro);
-    api.get('/admin/unidades').then(({ data }) => setUnidades(data.filter(u => u.ativo !== false).map(u => u.sigla))).catch(() => {});
-  }, []);
+    filtroRef.current = filtro;
+  }, [filtro]);
+
+  useEffect(() => {
+    carregar(filtroRef.current);
+  }, [carregar]);
+
+  useEffect(() => {
+    const handleUnidadeChange = () => {
+      const unidade = isLocked
+        ? user.unidade
+        : localStorage.getItem(UNIDADE_STORAGE_KEY) || '';
+      const nextFiltro = { ...filtroRef.current, unidade };
+      filtroRef.current = nextFiltro;
+      setFiltro(nextFiltro);
+      carregar(nextFiltro);
+    };
+
+    window.addEventListener('unidadeChange', handleUnidadeChange);
+    return () => window.removeEventListener('unidadeChange', handleUnidadeChange);
+  }, [carregar, isLocked, user.unidade]);
 
   const handleFiltrar = (e) => {
     e.preventDefault();
@@ -161,14 +183,6 @@ export default function AdminDashboard() {
               <option value="">Todos</option>
               <option value="funcionario">Funcionario</option>
               <option value="agregado">Agregado</option>
-            </select>
-          </div>
-          <div style={s.filterGroup}>
-            <label style={s.filterLabel}>Unidade</label>
-            <select style={{ ...s.filterInput, ...(isLocked ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }} value={filtro.unidade}
-              onChange={(e) => setFiltro({ ...filtro, unidade: e.target.value })} disabled={isLocked}>
-              {!isLocked && <option value="">Todas</option>}
-              {unidades.map(u => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
           <button type="submit" style={s.filterBtn} disabled={loading}>
