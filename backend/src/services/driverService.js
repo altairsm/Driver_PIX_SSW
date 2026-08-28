@@ -3,7 +3,6 @@ import { getConfig } from './configuracaoService.js';
 import { notificarAdiantamentoAutomatico } from './emailService.js';
 
 const APP_USAGE_OCCURRENCE_CODES = Object.freeze(['01', '03', '10', '11', '13', '38', '60']);
-const APP_USAGE_OCCURRENCE = "UPPER(COALESCE(v.ocorrencia, ''))";
 const APP_USAGE_CODE_FILTER = (paramPosition) => `LPAD(TRIM(COALESCE(v.codigo_ocorrencia, '')), 2, '0') = ANY($${paramPosition}::text[])`;
 
 export async function getDriverData(cpf) {
@@ -319,11 +318,7 @@ export async function confirmarRegras(cpf) {
 export async function getAppUsage(cpf, inicio, fim) {
   const result = await pool.query(`
     SELECT
-      CASE
-        WHEN ${APP_USAGE_OCCURRENCE} LIKE '%SSWMOBILE%' THEN 'APP'
-        WHEN ${APP_USAGE_OCCURRENCE} LIKE '%OPC 038%' THEN 'BASE'
-        ELSE 'SEM ORIGEM'
-      END AS origem,
+      v.origem_ocorrencia AS origem,
       COUNT(*)::int AS quantidade
     FROM ssw_455 v
     JOIN ssw_ctrcs c ON c.ctrc = v.ctrc_normalizado
@@ -331,8 +326,8 @@ export async function getAppUsage(cpf, inicio, fim) {
     WHERE r.motorista_cpf = $1
       AND c.ocorrencia_data BETWEEN $2::date AND $3::date
       AND ${APP_USAGE_CODE_FILTER(4)}
-    GROUP BY origem
-    ORDER BY origem
+    GROUP BY v.origem_ocorrencia
+    ORDER BY v.origem_ocorrencia
   `, [cpf, inicio, fim, APP_USAGE_OCCURRENCE_CODES]);
 
   const rows = result.rows;
@@ -449,11 +444,11 @@ export async function getAppUsageTodos(inicio, fim, tipo, unidade) {
       r.motorista_cpf AS cpf,
       r.motorista_nome AS nome,
       m.tipo,
-      COUNT(*) FILTER (WHERE ${APP_USAGE_OCCURRENCE} LIKE '%SSWMOBILE%')::int AS app,
-      COUNT(*) FILTER (WHERE ${APP_USAGE_OCCURRENCE} NOT LIKE '%SSWMOBILE%' AND ${APP_USAGE_OCCURRENCE} LIKE '%OPC 038%')::int AS base,
-      COUNT(*) FILTER (WHERE ${APP_USAGE_OCCURRENCE} NOT LIKE '%SSWMOBILE%' AND ${APP_USAGE_OCCURRENCE} NOT LIKE '%OPC 038%')::int AS sem_origem,
+      COUNT(*) FILTER (WHERE v.origem_ocorrencia = 'APP')::int AS app,
+      COUNT(*) FILTER (WHERE v.origem_ocorrencia = 'BASE')::int AS base,
+      COUNT(*) FILTER (WHERE v.origem_ocorrencia = 'SSW')::int AS ssw,
       COUNT(*)::int AS total,
-      ROUND(COUNT(*) FILTER (WHERE ${APP_USAGE_OCCURRENCE} LIKE '%SSWMOBILE%') * 100.0 / NULLIF(COUNT(*), 0), 1)::numeric(5,1) AS pct_app
+      ROUND(COUNT(*) FILTER (WHERE v.origem_ocorrencia = 'APP') * 100.0 / NULLIF(COUNT(*), 0), 1)::numeric(5,1) AS pct_app
     FROM ssw_455 v
     JOIN ssw_ctrcs c ON c.ctrc = v.ctrc_normalizado
     JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio

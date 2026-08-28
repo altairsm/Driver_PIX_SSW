@@ -4,7 +4,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 const USAGE_SOURCES = [
   { key: 'app', label: 'App', color: '#3de8a0' },
   { key: 'base', label: 'Base', color: '#ff9f40' },
-  { key: 'semOrigem', label: 'Sem origem', color: '#6b7280' },
+  { key: 'ssw', label: 'SSW', color: '#6b7280' },
 ];
 
 const OCCURRENCE_NOTE = 'Ocorrências consideradas: 01, 03, 10, 11, 13, 38 e 60.';
@@ -24,8 +24,8 @@ function getUsageTotals(appUsage) {
   return appUsage.reduce((totals, row) => ({
     app: totals.app + (Number(row.app) || 0),
     base: totals.base + (Number(row.base) || 0),
-    semOrigem: totals.semOrigem + (Number(row.sem_origem) || 0),
-  }), { app: 0, base: 0, semOrigem: 0 });
+    ssw: totals.ssw + (Number(row.ssw) || 0),
+  }), { app: 0, base: 0, ssw: 0 });
 }
 
 function UsageTooltip({ active, payload }) {
@@ -70,7 +70,7 @@ export function UsagePieSummary({ appUsage = [], loading = false, title = 'Distr
   const titleId = `usage-pie-title-${instanceId}`;
   const descriptionId = `usage-pie-description-${instanceId}`;
   const totals = getUsageTotals(appUsage);
-  const totalUsage = totals.app + totals.base + totals.semOrigem;
+  const totalUsage = totals.app + totals.base + totals.ssw;
   const chartData = USAGE_SOURCES.map(source => ({
     ...source,
     value: totals[source.key],

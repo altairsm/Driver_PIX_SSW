@@ -151,6 +151,13 @@ export async function importarSsw036(rows) {
   return { motoristas, romaneios, ctrcs, erros };
 }
 
+function classificarOrigem(texto) {
+  const t = (texto || '').toUpperCase();
+  if (t.includes('SSWMOBILE')) return 'APP';
+  if (t.includes('OPC 038')) return 'BASE';
+  return 'SSW';
+}
+
 export async function importarSsw455(rows) {
   let importados = 0;
   let erros = 0;
@@ -190,6 +197,7 @@ export async function importarSsw455(rows) {
       const tipoBaixa = (row['Tipo de Baixa'] || '').trim();
       const valorMercadoria = parseFloat((row['Valor da Mercadoria'] || '0').replace(/\./g, '').replace(',', '.')) || 0;
       const setorDestino = (row['Setor de Destino'] || '').trim();
+      const origemOcorrencia = classificarOrigem(ocorrencia);
 
       await pool.query(`
         INSERT INTO ssw_455 (
@@ -200,8 +208,8 @@ export async function importarSsw455(rows) {
           data_baixa, ocorrencia, controle_duplicidade,
           numero_nota_fiscal, previsao_entrega, data_ultima_ocorrencia,
           unidade_ultima_ocorrencia, cubagem_m3, tipo_baixa, valor_mercadoria, setor_destino,
-          codigo_ocorrencia
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+          codigo_ocorrencia, origem_ocorrencia
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
         ON CONFLICT ("controle_duplicidade") DO UPDATE SET
           unidade_receptora = EXCLUDED.unidade_receptora,
           ocorrencia = CASE WHEN EXCLUDED.data_ultima_ocorrencia >= ssw_455.data_ultima_ocorrencia OR ssw_455.data_ultima_ocorrencia IS NULL THEN EXCLUDED.ocorrencia ELSE ssw_455.ocorrencia END,
@@ -219,7 +227,8 @@ export async function importarSsw455(rows) {
           tipo_baixa = EXCLUDED.tipo_baixa,
           valor_mercadoria = EXCLUDED.valor_mercadoria,
           setor_destino = EXCLUDED.setor_destino,
-          codigo_ocorrencia = CASE WHEN EXCLUDED.data_ultima_ocorrencia >= ssw_455.data_ultima_ocorrencia OR ssw_455.data_ultima_ocorrencia IS NULL THEN EXCLUDED.codigo_ocorrencia ELSE ssw_455.codigo_ocorrencia END
+          codigo_ocorrencia = CASE WHEN EXCLUDED.data_ultima_ocorrencia >= ssw_455.data_ultima_ocorrencia OR ssw_455.data_ultima_ocorrencia IS NULL THEN EXCLUDED.codigo_ocorrencia ELSE ssw_455.codigo_ocorrencia END,
+          origem_ocorrencia = CASE WHEN EXCLUDED.data_ultima_ocorrencia >= ssw_455.data_ultima_ocorrencia OR ssw_455.data_ultima_ocorrencia IS NULL THEN EXCLUDED.origem_ocorrencia ELSE ssw_455.origem_ocorrencia END
       `, [
         ctrc, ctrcNormalizado, serieNumeroCte, dataEmissao,
         cnpjPagador, clientePagador, unidadeReceptora,
@@ -228,7 +237,7 @@ export async function importarSsw455(rows) {
         dataBaixa, ocorrencia, controleDuplicidade,
         numeroNotaFiscal, previsaoEntrega, dataUltimaOcorrencia,
         unidadeUltimaOcorrencia, cubagemM3, tipoBaixa, valorMercadoria, setorDestino,
-        codigoOcorrencia,
+        codigoOcorrencia, origemOcorrencia,
       ]);
 
       if (cnpjPagador && !cnpjsVistos.has(cnpjPagador)) {
@@ -305,15 +314,17 @@ export async function importarSsw930(rows) {
 
   for (const [ctrcNorm, info] of ctrcsVistos) {
     try {
+      const origem = classificarOrigem(info.descOcor);
       const { rowCount } = await pool.query(`
         UPDATE ssw_455 SET
           ocorrencia = $1,
           data_ultima_ocorrencia = $2::date,
           codigo_ocorrencia = $3,
-          unidade_ultima_ocorrencia = COALESCE($4, unidade_ultima_ocorrencia)
-        WHERE ctrc_normalizado = $5
+          unidade_ultima_ocorrencia = COALESCE($4, unidade_ultima_ocorrencia),
+          origem_ocorrencia = $5
+        WHERE ctrc_normalizado = $6
           AND ($2::date >= data_ultima_ocorrencia OR data_ultima_ocorrencia IS NULL)
-      `, [info.descOcor, info.dataOcor, info.codOcor, info.unidadeUltimaOcorrencia, ctrcNorm]);
+      `, [info.descOcor, info.dataOcor, info.codOcor, info.unidadeUltimaOcorrencia, origem, ctrcNorm]);
 
       if (rowCount > 0) {
         atualizados++;

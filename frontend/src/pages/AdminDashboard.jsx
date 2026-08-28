@@ -269,7 +269,7 @@ export default function AdminDashboard() {
                       <th style={s.th}>Tipo</th>
                       <th style={s.th}>APP</th>
                       <th style={s.th}>BASE</th>
-                      <th style={s.th}>Sem Origem</th>
+                      <th style={s.th}>SSW</th>
                       <th style={s.th}>Total</th>
                       <th style={{ ...s.th, minWidth: 200 }}>% APP</th>
                     </tr>
@@ -284,7 +284,7 @@ export default function AdminDashboard() {
                           <td style={s.td}><span style={tipoBadgeStyle(a.tipo)}>{tipoLabel(a.tipo)}</span></td>
                           <td style={{ ...s.td, color: '#3de8a0' }}>{a.app}</td>
                           <td style={{ ...s.td, color: '#ff9f40' }}>{a.base}</td>
-                          <td style={{ ...s.td, color: '#6b7280' }}>{a.sem_origem}</td>
+                          <td style={{ ...s.td, color: '#6b7280' }}>{a.ssw}</td>
                           <td style={s.td}>{a.total}</td>
                           <td style={s.td}>
                             <div style={s.barWrap}>

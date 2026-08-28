@@ -416,6 +416,17 @@ export async function runMigrations() {
     }
     console.log('  -> ssw_455 (codigo_ocorrencia)');
 
+    await pool.query(`ALTER TABLE ssw_455 ADD COLUMN IF NOT EXISTS origem_ocorrencia VARCHAR(10)`);
+    await pool.query(`
+      UPDATE ssw_455 SET origem_ocorrencia = CASE
+        WHEN UPPER(ocorrencia) LIKE '%SSWMOBILE%' THEN 'APP'
+        WHEN UPPER(ocorrencia) LIKE '%OPC 038%' THEN 'BASE'
+        ELSE 'SSW'
+      END
+      WHERE origem_ocorrencia IS NULL
+    `);
+    console.log('  -> ssw_455 (origem_ocorrencia)');
+
     await pool.query('CREATE INDEX IF NOT EXISTS idx_ssw_455_ctrc ON ssw_455 (ctrc_normalizado)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_ssw_455_pagador ON ssw_455 (cnpj_pagador)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_ssw_455_unidade ON ssw_455 (unidade_receptora)');
