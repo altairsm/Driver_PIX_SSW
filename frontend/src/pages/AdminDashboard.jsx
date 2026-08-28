@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getEficienciaMotoristas, getAppUsageMotoristas, getAppUsageAjudantes, getCtrcsParados, getCtrcsParadosDetalhado, getExpedicao, getExpedicaoAgrupada } from '../services/api';
+import { getEficienciaMotoristas, getAppUsageMotoristas, getAppUsageAjudantes, getCtrcsParados, getCtrcsParadosDetalhado, getExpedicao, getExpedicaoAgrupada, getEscoamento } from '../services/api';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import * as XLSX from 'xlsx';
 import Topbar, { UNIDADE_STORAGE_KEY } from '../components/Topbar';
 import UsagePieSummary from '../components/UsagePieSummary';
+
+const ESCOAMENTO_CORES = {
+  antecipada: '#60a5fa',
+  no_dia: '#3de8a0',
+  vencida: '#ff5a5a',
+};
 
 export default function AdminDashboard() {
   const defaultInicio = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
@@ -20,6 +27,7 @@ export default function AdminDashboard() {
   const [eficiencia, setEficiencia] = useState([]);
   const [appUsage, setAppUsage] = useState([]);
   const [appUsageAjudantes, setAppUsageAjudantes] = useState([]);
+  const [escoamento, setEscoamento] = useState([]);
   const [ctrcsParados, setCtrcsParados] = useState([]);
   const [expedicao, setExpedicao] = useState([]);
   const [expedicaoAgrupada, setExpedicaoAgrupada] = useState([]);
@@ -36,10 +44,11 @@ export default function AdminDashboard() {
       const fFim = f?.fim || null;
       const fTipo = f?.tipo || null;
       const fUnidade = f?.unidade || null;
-      const [ef, app, appAjud, parados, exp, expAgrup] = await Promise.all([
+      const [ef, app, appAjud, esc, parados, exp, expAgrup] = await Promise.all([
         getEficienciaMotoristas(fInicio, fFim, fTipo, fUnidade),
         getAppUsageMotoristas(fInicio, fFim, fTipo, fUnidade),
         getAppUsageAjudantes(fInicio, fFim, fTipo, fUnidade),
+        getEscoamento(fInicio, fFim, fUnidade),
         getCtrcsParados(fUnidade),
         getExpedicao(fUnidade),
         getExpedicaoAgrupada(fUnidade),
@@ -47,6 +56,7 @@ export default function AdminDashboard() {
       setEficiencia(ef);
       setAppUsage(app);
       setAppUsageAjudantes(appAjud);
+      setEscoamento(esc);
       setCtrcsParados(parados);
       setExpedicao(exp);
       setExpedicaoAgrupada(expAgrup);
@@ -198,6 +208,7 @@ export default function AdminDashboard() {
           {[
             { id: 'eficiencia', label: 'Eficiência', icon: '📊' },
             { id: 'app', label: 'Uso do App', icon: '📱' },
+            { id: 'escoamento', label: 'Escoamento', icon: '🌊' },
             { id: 'aging', label: 'CTRCs Parados', icon: '⏳' },
             { id: 'expedicao', label: 'Expedição', icon: '📦' },
           ].map(t => (
@@ -351,6 +362,61 @@ export default function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'escoamento' && (
+          <div style={s.section} aria-busy={loading}>
+            <div style={s.sectionTitle}>Escoamento por Cliente</div>
+            <div style={{ ...s.sectionSub, marginBottom: 16 }}>
+              Entregas (ocorrência 01) agrupadas por dia, comparando a data da entrega com a previsão de entrega.
+            </div>
+            {escoamento.length === 0 ? (
+              <div style={s.empty}>Nenhum dado de escoamento encontrado para os filtros selecionados.</div>
+            ) : (
+              (() => {
+                const porCliente = {};
+                escoamento.forEach(r => { (porCliente[r.cliente] = porCliente[r.cliente] || []).push(r); });
+                const clientes = Object.keys(porCliente).sort((a, b) =>
+                  porCliente[b].reduce((s, r) => s + r.total, 0) - porCliente[a].reduce((s, r) => s + r.total, 0));
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 16 }}>
+                    {clientes.map(cliente => {
+                      const dias = porCliente[cliente];
+                      const totA = dias.reduce((s, r) => s + r.antecipada, 0);
+                      const totN = dias.reduce((s, r) => s + r.no_dia, 0);
+                      const totV = dias.reduce((s, r) => s + r.vencida, 0);
+                      const tot = totA + totN + totV;
+                      const pct = (v) => tot > 0 ? ((v / tot) * 100).toFixed(1) : '0.0';
+                      return (
+                        <div key={cliente} style={{ background: '#161920', border: '1px solid #2a2f3e', borderRadius: 8, padding: 16 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                            <div style={{ fontWeight: 600, color: '#e8eaf0', fontSize: '0.95rem' }}>{cliente}</div>
+                            <div style={{ color: '#6b7280', fontSize: '0.72rem' }}>{tot} entregas</div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 12, marginBottom: 12, fontSize: '0.72rem' }}>
+                            <span style={{ color: ESCOAMENTO_CORES.antecipada }}>■ Antecipada {pct(totA)}%</span>
+                            <span style={{ color: ESCOAMENTO_CORES.no_dia }}>■ No dia {pct(totN)}%</span>
+                            <span style={{ color: ESCOAMENTO_CORES.vencida }}>■ Vencida {pct(totV)}%</span>
+                          </div>
+                          <ResponsiveContainer width="100%" height={200}>
+                            <BarChart data={dias} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                              <XAxis dataKey="dia" tick={{ fill: '#6b7280', fontSize: 10 }} />
+                              <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} allowDecimals={false} />
+                              <Tooltip contentStyle={{ background: '#161920', border: '1px solid #2a2f3e', color: '#e8eaf0' }} />
+                              <Legend wrapperStyle={{ fontSize: 10 }} />
+                              <Bar dataKey="antecipada" name="Antecipada" fill={ESCOAMENTO_CORES.antecipada} />
+                              <Bar dataKey="no_dia" name="No dia" fill={ESCOAMENTO_CORES.no_dia} />
+                              <Bar dataKey="vencida" name="Vencida" fill={ESCOAMENTO_CORES.vencida} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()
             )}
           </div>
         )}

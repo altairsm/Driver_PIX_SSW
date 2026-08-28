@@ -301,6 +301,15 @@ export async function getAppUsageAjudantes(inicio, fim, tipo, unidade) {
   return data;
 }
 
+export async function getEscoamento(inicio, fim, unidade) {
+  const params = {};
+  if (inicio) params.inicio = inicio;
+  if (fim) params.fim = fim;
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/escoamento', { params });
+  return data;
+}
+
 export async function getCtrcsParados(unidade) {
   const params = {};
   if (unidade) params.unidade = unidade;

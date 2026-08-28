@@ -501,3 +501,32 @@ export async function getAppUsageAjudantes(inicio, fim, tipo, unidade) {
   `, params);
   return result.rows;
 }
+
+export async function getEscoamento(inicio, fim, unidade) {
+  const params = [];
+  const conditions = [];
+  if (inicio) { params.push(inicio); conditions.push(`v.data_ultima_ocorrencia >= $${params.length}::date`); }
+  if (fim) { params.push(fim); conditions.push(`v.data_ultima_ocorrencia <= $${params.length}::date`); }
+  if (unidade) { params.push(unidade); conditions.push(`v.unidade_receptora = $${params.length}`); }
+  const where = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
+
+  const result = await pool.query(`
+    SELECT
+      COALESCE(p.nome_simplificado, v.cliente_pagador) AS cliente,
+      to_char(v.data_ultima_ocorrencia, 'YYYY-MM-DD') AS dia,
+      COUNT(*) FILTER (WHERE v.data_ultima_ocorrencia < v.previsao_entrega)::int AS antecipada,
+      COUNT(*) FILTER (WHERE v.data_ultima_ocorrencia = v.previsao_entrega)::int AS no_dia,
+      COUNT(*) FILTER (WHERE v.data_ultima_ocorrencia > v.previsao_entrega)::int AS vencida,
+      COUNT(*)::int AS total
+    FROM ssw_455 v
+    JOIN pagadores p ON p.cnpj = v.cnpj_pagador
+    WHERE v.codigo_ocorrencia = '01'
+      AND v.previsao_entrega IS NOT NULL
+      AND v.data_ultima_ocorrencia IS NOT NULL
+      AND p.ativo = true
+      ${where}
+    GROUP BY cliente, dia
+    ORDER BY cliente, dia
+  `, params);
+  return result.rows;
+}

@@ -7,7 +7,7 @@ import {
   listarMotoristas, criarMotorista, atualizarMotorista, deletarMotorista,
   getQuinzenasAdmin, getCidadesSemPreco, getCtrcsParados, getCtrcsParadosDetalhado
 } from '../services/paymentService.js';
-import { getEficienciaTodos, getAppUsageTodos, getAppUsageAjudantes } from '../services/driverService.js';
+import { getEficienciaTodos, getAppUsageTodos, getAppUsageAjudantes, getEscoamento } from '../services/driverService.js';
 import { enviarSenhaPorEmail } from '../services/emailService.js';
 import {
   listarAjudantes, criarAjudante, atualizarAjudante, deletarAjudante
@@ -262,6 +262,17 @@ router.get('/app-usage-ajudantes', async (req, res) => {
   } catch (err) {
     console.error('Erro ao buscar uso do app por ajudante:', err);
     res.status(500).json({ error: 'Erro ao buscar uso do app' });
+  }
+});
+
+router.get('/escoamento', async (req, res) => {
+  try {
+    const { inicio, fim, unidade } = req.query;
+    const data = await getEscoamento(inicio || null, fim || null, unidade || null);
+    res.json(data);
+  } catch (err) {
+    console.error('Erro ao buscar escoamento:', err);
+    res.status(500).json({ error: 'Erro ao buscar escoamento' });
   }
 });
 
