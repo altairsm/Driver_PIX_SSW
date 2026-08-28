@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getEficienciaMotoristas, getAppUsageMotoristas, getCtrcsParados, getCtrcsParadosDetalhado, getExpedicao, getExpedicaoAgrupada } from '../services/api';
+import { getEficienciaMotoristas, getAppUsageMotoristas, getAppUsageAjudantes, getCtrcsParados, getCtrcsParadosDetalhado, getExpedicao, getExpedicaoAgrupada } from '../services/api';
 import * as XLSX from 'xlsx';
 import Topbar, { UNIDADE_STORAGE_KEY } from '../components/Topbar';
 import UsagePieSummary from '../components/UsagePieSummary';
@@ -19,6 +19,7 @@ export default function AdminDashboard() {
   const filtroRef = useRef(filtro);
   const [eficiencia, setEficiencia] = useState([]);
   const [appUsage, setAppUsage] = useState([]);
+  const [appUsageAjudantes, setAppUsageAjudantes] = useState([]);
   const [ctrcsParados, setCtrcsParados] = useState([]);
   const [expedicao, setExpedicao] = useState([]);
   const [expedicaoAgrupada, setExpedicaoAgrupada] = useState([]);
@@ -35,15 +36,17 @@ export default function AdminDashboard() {
       const fFim = f?.fim || null;
       const fTipo = f?.tipo || null;
       const fUnidade = f?.unidade || null;
-      const [ef, app, parados, exp, expAgrup] = await Promise.all([
+      const [ef, app, appAjud, parados, exp, expAgrup] = await Promise.all([
         getEficienciaMotoristas(fInicio, fFim, fTipo, fUnidade),
         getAppUsageMotoristas(fInicio, fFim, fTipo, fUnidade),
+        getAppUsageAjudantes(fInicio, fFim, fTipo, fUnidade),
         getCtrcsParados(fUnidade),
         getExpedicao(fUnidade),
         getExpedicaoAgrupada(fUnidade),
       ]);
       setEficiencia(ef);
       setAppUsage(app);
+      setAppUsageAjudantes(appAjud);
       setCtrcsParados(parados);
       setExpedicao(exp);
       setExpedicaoAgrupada(expAgrup);
@@ -281,6 +284,55 @@ export default function AdminDashboard() {
                         <tr key={i}>
                           <td style={s.td}>{a.nome}</td>
                           <td style={s.td}>{a.cpf}</td>
+                          <td style={s.td}><span style={tipoBadgeStyle(a.tipo)}>{tipoLabel(a.tipo)}</span></td>
+                          <td style={{ ...s.td, color: '#3de8a0' }}>{a.app}</td>
+                          <td style={{ ...s.td, color: '#ff9f40' }}>{a.base}</td>
+                          <td style={{ ...s.td, color: '#6b7280' }}>{a.ssw}</td>
+                          <td style={s.td}>{a.total}</td>
+                          <td style={s.td}>
+                            <div style={s.barWrap}>
+                              <div style={{ ...s.barFill, width: `${pct}%`, background: '#3de8a0' }}></div>
+                              <div style={{ ...s.barFill, width: `${a.total > 0 ? ((a.base / a.total) * 100).toFixed(1) : 0}%`, background: '#ff9f40', position: 'absolute', left: `${pct}%` }}></div>
+                            </div>
+                            <span style={{ ...s.pctLabel, color: '#3de8a0' }}>{pct}%</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div style={{ ...s.sectionTitle, marginTop: 32 }}>Uso do App por Ajudante</div>
+            <div className="usage-pie-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginTop: 16 }}>
+              <UsagePieSummary appUsage={appUsageAjudantes} loading={loading} title="Total CTRCs" showNote />
+              <UsagePieSummary appUsage={appUsageAjudantes.filter(r => r.tipo === 'agregado')} loading={loading} title="Agregados" />
+              <UsagePieSummary appUsage={appUsageAjudantes.filter(r => r.tipo === 'funcionario')} loading={loading} title="Funcionários" />
+            </div>
+            {appUsageAjudantes.length === 0 ? (
+              <div style={s.empty}>Nenhum registro encontrado para os filtros e ocorrências selecionados.</div>
+            ) : (
+              <div className="app-usage-table-wrap" style={s.tableWrap}>
+                <table style={s.table}>
+                  <thead>
+                    <tr>
+                      <th style={s.th}>Ajudante</th>
+                      <th style={s.th}>Código</th>
+                      <th style={s.th}>Tipo</th>
+                      <th style={s.th}>APP</th>
+                      <th style={s.th}>BASE</th>
+                      <th style={s.th}>SSW</th>
+                      <th style={s.th}>Total</th>
+                      <th style={{ ...s.th, minWidth: 200 }}>% APP</th>
+                    </tr>
+                  </thead>
+                  <tbody style={{ opacity: loading ? 0.55 : 1 }}>
+                    {appUsageAjudantes.map((a, i) => {
+                      const pct = Number(a.pct_app) || 0;
+                      return (
+                        <tr key={i}>
+                          <td style={s.td}>{a.nome}</td>
+                          <td style={s.td}>{a.codigo}</td>
                           <td style={s.td}><span style={tipoBadgeStyle(a.tipo)}>{tipoLabel(a.tipo)}</span></td>
                           <td style={{ ...s.td, color: '#3de8a0' }}>{a.app}</td>
                           <td style={{ ...s.td, color: '#ff9f40' }}>{a.base}</td>

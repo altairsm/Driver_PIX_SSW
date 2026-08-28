@@ -8,6 +8,7 @@ import MeusDados from './pages/MeusDados'
 import AdminPagamentos from './pages/AdminPagamentos'
 import AdminSswUpload from './pages/AdminSswUpload'
 import AdminMotoristas from './pages/AdminMotoristas'
+import AdminAjudantes from './pages/AdminAjudantes'
 import AdminSolicitacoesPagamento from './pages/AdminSolicitacoesPagamento'
 import AdminConfiguracoes from './pages/AdminConfiguracoes'
 import AdminTaxasAdiantamento from './pages/AdminTaxasAdiantamento'
@@ -98,6 +99,7 @@ function App() {
       <Route path="/admin/pagamentos" element={<RoleRoute allowedRoles={['admin']}><AdminPagamentos /></RoleRoute>} />
       <Route path="/admin/upload" element={<RoleRoute allowedRoles={['admin', 'operador']}><AdminSswUpload /></RoleRoute>} />
       <Route path="/admin/motoristas" element={<RoleRoute allowedRoles={['admin']}><AdminMotoristas /></RoleRoute>} />
+      <Route path="/admin/ajudantes" element={<RoleRoute allowedRoles={['admin']}><AdminAjudantes /></RoleRoute>} />
       <Route path="/admin/solicitacoes-pagamento" element={<RoleRoute allowedRoles={['admin']}><AdminSolicitacoesPagamento /></RoleRoute>} />
       <Route path="/admin/configuracoes" element={<RoleRoute allowedRoles={['admin']}><AdminConfiguracoes /></RoleRoute>} />
       <Route path="/admin/taxas-adiantamento" element={<RoleRoute allowedRoles={['admin']}><AdminTaxasAdiantamento /></RoleRoute>} />

@@ -165,6 +165,28 @@ export async function deleteMotorista(cpf) {
   return data;
 }
 
+export async function getAjudantes(unidade) {
+  const params = {};
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/ajudantes', { params });
+  return data;
+}
+
+export async function createAjudante(dados) {
+  const { data } = await api.post('/admin/ajudantes', dados);
+  return data;
+}
+
+export async function updateAjudante(codigo, dados) {
+  const { data } = await api.put(`/admin/ajudantes/${codigo}`, dados);
+  return data;
+}
+
+export async function deleteAjudante(codigo) {
+  const { data } = await api.delete(`/admin/ajudantes/${codigo}`);
+  return data;
+}
+
 export async function sendMotoristaPassword(cpf) {
   const { data } = await api.post(`/admin/motoristas/${cpf}/enviar-senha`);
   return data;
@@ -266,6 +288,16 @@ export async function getAppUsageMotoristas(inicio, fim, tipo, unidade) {
   if (tipo) params.tipo = tipo;
   if (unidade) params.unidade = unidade;
   const { data } = await api.get('/admin/app-usage-motoristas', { params });
+  return data;
+}
+
+export async function getAppUsageAjudantes(inicio, fim, tipo, unidade) {
+  const params = {};
+  if (inicio) params.inicio = inicio;
+  if (fim) params.fim = fim;
+  if (tipo) params.tipo = tipo;
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/app-usage-ajudantes', { params });
   return data;
 }
 

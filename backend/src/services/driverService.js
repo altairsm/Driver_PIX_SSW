@@ -460,3 +460,45 @@ export async function getAppUsageTodos(inicio, fim, tipo, unidade) {
   `, params);
   return result.rows;
 }
+
+export async function getAppUsageAjudantes(inicio, fim, tipo, unidade) {
+  const params = [];
+  const conditions = [];
+  if (inicio) { params.push(inicio); }
+  if (fim) { params.push(fim); }
+  if (tipo) { params.push(tipo); conditions.push(`a.tipo = $${params.length}`); }
+  if (unidade) { params.push(unidade); conditions.push(`v.unidade_receptora = $${params.length}`); }
+
+  const occurrenceCodesParam = params.length + 1;
+  params.push(APP_USAGE_OCCURRENCE_CODES);
+  const occurrenceCodeFilter = APP_USAGE_CODE_FILTER(occurrenceCodesParam);
+  const whereTipo = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
+  const dateFilter = (col) => {
+    if (inicio && fim) return `${col} >= $1 AND ${col} <= $2`;
+    if (inicio) return `${col} >= $1`;
+    if (fim) return `${col} <= $1`;
+    return `${col} >= (CURRENT_DATE - INTERVAL '30 days')::date`;
+  };
+
+  const result = await pool.query(`
+    SELECT
+      ra.ajudante_codigo AS codigo,
+      a.nome,
+      a.tipo,
+      COUNT(*) FILTER (WHERE v.origem_ocorrencia = 'APP')::int AS app,
+      COUNT(*) FILTER (WHERE v.origem_ocorrencia = 'BASE')::int AS base,
+      COUNT(*) FILTER (WHERE v.origem_ocorrencia = 'SSW')::int AS ssw,
+      COUNT(*)::int AS total,
+      ROUND(COUNT(*) FILTER (WHERE v.origem_ocorrencia = 'APP') * 100.0 / NULLIF(COUNT(*), 0), 1)::numeric(5,1) AS pct_app
+    FROM ssw_455 v
+    JOIN ssw_ctrcs c ON c.ctrc = v.ctrc_normalizado
+    JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
+    JOIN ssw_romaneio_ajudantes ra ON ra.id_romaneio = r.id_romaneio AND ra.ordem = 1
+    JOIN ajudantes a ON a.codigo = ra.ajudante_codigo
+    WHERE ${dateFilter('c.ocorrencia_data')} ${whereTipo}
+      AND ${occurrenceCodeFilter}
+    GROUP BY ra.ajudante_codigo, a.nome, a.tipo
+    ORDER BY pct_app DESC
+  `, params);
+  return result.rows;
+}

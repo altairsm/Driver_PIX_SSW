@@ -37,6 +37,27 @@ export async function runMigrations() {
     }
     console.log('  -> motoristas (email, role, password_hash, pre_aprovado)');
 
+    await pool.query(`CREATE TABLE IF NOT EXISTS ajudantes (
+      codigo VARCHAR(20) PRIMARY KEY,
+      nome VARCHAR(200) NOT NULL,
+      observacao VARCHAR(200),
+      celular VARCHAR(20),
+      unidade VARCHAR(20),
+      tipo VARCHAR(20) DEFAULT 'funcionario',
+      criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`);
+    console.log('  -> ajudantes');
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS ssw_romaneio_ajudantes (
+      id_romaneio VARCHAR(30) NOT NULL REFERENCES ssw_romaneios(id_romaneio),
+      ajudante_codigo VARCHAR(20) NOT NULL REFERENCES ajudantes(codigo),
+      ordem SMALLINT NOT NULL,
+      PRIMARY KEY (id_romaneio, ordem)
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ajudantes_unidade ON ajudantes(unidade)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_sra_ajudante ON ssw_romaneio_ajudantes(ajudante_codigo)`);
+    console.log('  -> ssw_romaneio_ajudantes');
+
     await pool.query(`CREATE TABLE IF NOT EXISTS ssw_romaneios (
       id_romaneio VARCHAR(30) PRIMARY KEY,
       motorista_cpf VARCHAR(11) NOT NULL REFERENCES motoristas(cpf),

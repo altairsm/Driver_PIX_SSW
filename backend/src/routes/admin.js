@@ -7,8 +7,11 @@ import {
   listarMotoristas, criarMotorista, atualizarMotorista, deletarMotorista,
   getQuinzenasAdmin, getCidadesSemPreco, getCtrcsParados, getCtrcsParadosDetalhado
 } from '../services/paymentService.js';
-import { getEficienciaTodos, getAppUsageTodos } from '../services/driverService.js';
+import { getEficienciaTodos, getAppUsageTodos, getAppUsageAjudantes } from '../services/driverService.js';
 import { enviarSenhaPorEmail } from '../services/emailService.js';
+import {
+  listarAjudantes, criarAjudante, atualizarAjudante, deletarAjudante
+} from '../services/ajudanteService.js';
 
 const router = Router();
 
@@ -199,6 +202,65 @@ router.get('/app-usage-motoristas', async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error('Erro ao buscar uso do app:', err);
+    res.status(500).json({ error: 'Erro ao buscar uso do app' });
+  }
+});
+
+router.get('/ajudantes', async (req, res) => {
+  try {
+    const { unidade } = req.query;
+    const ajudantes = await listarAjudantes(unidade || null);
+    res.json(ajudantes);
+  } catch (err) {
+    console.error('Erro ao buscar ajudantes:', err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+router.post('/ajudantes', requireRole('admin'), async (req, res) => {
+  try {
+    const ajudante = await criarAjudante(req.body);
+    res.status(201).json(ajudante);
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Código já cadastrado' });
+    }
+    console.error('Erro ao criar ajudante:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao criar ajudante' });
+  }
+});
+
+router.put('/ajudantes/:codigo', requireRole('admin'), async (req, res) => {
+  try {
+    const { codigo } = req.params;
+    const atualizado = await atualizarAjudante(codigo, req.body);
+    if (!atualizado) return res.status(404).json({ error: 'Ajudante não encontrado' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erro ao atualizar ajudante:', err);
+    res.status(500).json({ error: 'Erro ao atualizar ajudante' });
+  }
+});
+
+router.delete('/ajudantes/:codigo', requireRole('admin'), async (req, res) => {
+  try {
+    const { codigo } = req.params;
+    const deletado = await deletarAjudante(codigo);
+    if (!deletado) return res.status(404).json({ error: 'Ajudante não encontrado' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erro ao deletar ajudante:', err);
+    res.status(500).json({ error: 'Erro ao deletar ajudante' });
+  }
+});
+
+router.get('/app-usage-ajudantes', async (req, res) => {
+  try {
+    const { inicio, fim, tipo, unidade } = req.query;
+    const data = await getAppUsageAjudantes(inicio || null, fim || null, tipo || null, unidade || null);
+    res.json(data);
+  } catch (err) {
+    console.error('Erro ao buscar uso do app por ajudante:', err);
     res.status(500).json({ error: 'Erro ao buscar uso do app' });
   }
 });

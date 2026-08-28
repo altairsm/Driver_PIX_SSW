@@ -93,6 +93,21 @@ export async function importarSsw036(rows) {
       if (!romaneioSet.has(idRomaneio)) {
         romaneioSet.add(idRomaneio);
         romaneios++;
+
+        for (const [colAjud, ordem] of [['AJUDANTE', 1], ['AJUDANTE_2', 2], ['AJUDANTE_3', 3]]) {
+          const codAjud = (row[colAjud] || '').trim().replace(/\D/g, '');
+          if (!codAjud) continue;
+          await pool.query(
+            'INSERT INTO ajudantes (codigo) VALUES ($1) ON CONFLICT (codigo) DO NOTHING',
+            [codAjud]
+          );
+          await pool.query(
+            `INSERT INTO ssw_romaneio_ajudantes (id_romaneio, ajudante_codigo, ordem)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (id_romaneio, ordem) DO UPDATE SET ajudante_codigo = EXCLUDED.ajudante_codigo`,
+            [idRomaneio, codAjud, ordem]
+          );
+        }
       }
 
       const freteStr = (row['FRETE CTRC'] || '0').replace(/\./g, '').replace(',', '.');
