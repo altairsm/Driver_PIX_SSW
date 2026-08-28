@@ -392,11 +392,12 @@ export async function runMigrations() {
     for (const col of [
       "ADD COLUMN IF NOT EXISTS numero_nota_fiscal VARCHAR(50)",
       "ADD COLUMN IF NOT EXISTS previsao_entrega DATE",
-      "ADD COLUMN IF NOT EXISTS data_ultima_ocorrencia DATE"
+      "ADD COLUMN IF NOT EXISTS data_ultima_ocorrencia DATE",
+      "ADD COLUMN IF NOT EXISTS unidade_ultima_ocorrencia VARCHAR(10)"
     ]) {
       await pool.query(`DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='ssw_455') THEN ALTER TABLE ssw_455 ${col}; END IF; END $$`);
     }
-    console.log('  -> ssw_455 (numero_nota_fiscal, previsao_entrega, data_ultima_ocorrencia)');
+    console.log('  -> ssw_455 (numero_nota_fiscal, previsao_entrega, data_ultima_ocorrencia, unidade_ultima_ocorrencia)');
 
     for (const col of [
       "ADD COLUMN IF NOT EXISTS cubagem_m3 NUMERIC(10,3) DEFAULT 0",

@@ -17,6 +17,12 @@ function parseBrDate(str) {
   return s;
 }
 
+function normalizarUnidadeOcorrencia(value) {
+  const unidade = String(value ?? '').trim();
+  if (!unidade) return null;
+  return unidade.replace(/^NCR\s*-\s*/i, '').trim() || null;
+}
+
 export function parseCSV(filePath, fromLine = 1) {
   const raw = fs.readFileSync(filePath, 'utf8');
   const normalized = raw.replace(/^\uFEFF/, '');
@@ -179,6 +185,7 @@ export async function importarSsw455(rows) {
       const numeroNotaFiscal = (row['Numero da Nota Fiscal'] || '').trim();
       const previsaoEntrega = parseBrDate(row['Previsao de Entrega']);
       const dataUltimaOcorrencia = parseBrDate(row['Data da Ultima Ocorrencia']);
+      const unidadeUltimaOcorrencia = normalizarUnidadeOcorrencia(row['Unidade da Ultima Ocorrencia']);
       const cubagemM3 = parseFloat((row['Cubagem em m3'] || '0').replace(/\./g, '').replace(',', '.')) || 0;
       const tipoBaixa = (row['Tipo de Baixa'] || '').trim();
       const valorMercadoria = parseFloat((row['Valor da Mercadoria'] || '0').replace(/\./g, '').replace(',', '.')) || 0;
@@ -192,9 +199,9 @@ export async function importarSsw455(rows) {
           peso_real, volumes, valor_frete, tipo_frete,
           data_baixa, ocorrencia, controle_duplicidade,
           numero_nota_fiscal, previsao_entrega, data_ultima_ocorrencia,
-          cubagem_m3, tipo_baixa, valor_mercadoria, setor_destino,
+          unidade_ultima_ocorrencia, cubagem_m3, tipo_baixa, valor_mercadoria, setor_destino,
           codigo_ocorrencia
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
         ON CONFLICT ("controle_duplicidade") DO UPDATE SET
           unidade_receptora = EXCLUDED.unidade_receptora,
           ocorrencia = CASE WHEN EXCLUDED.data_ultima_ocorrencia >= ssw_455.data_ultima_ocorrencia OR ssw_455.data_ultima_ocorrencia IS NULL THEN EXCLUDED.ocorrencia ELSE ssw_455.ocorrencia END,
@@ -203,6 +210,11 @@ export async function importarSsw455(rows) {
           numero_nota_fiscal = EXCLUDED.numero_nota_fiscal,
           previsao_entrega = EXCLUDED.previsao_entrega,
           data_ultima_ocorrencia = CASE WHEN EXCLUDED.data_ultima_ocorrencia >= ssw_455.data_ultima_ocorrencia OR ssw_455.data_ultima_ocorrencia IS NULL THEN EXCLUDED.data_ultima_ocorrencia ELSE ssw_455.data_ultima_ocorrencia END,
+          unidade_ultima_ocorrencia = CASE
+            WHEN EXCLUDED.data_ultima_ocorrencia >= ssw_455.data_ultima_ocorrencia OR ssw_455.data_ultima_ocorrencia IS NULL
+              THEN COALESCE(EXCLUDED.unidade_ultima_ocorrencia, ssw_455.unidade_ultima_ocorrencia)
+            ELSE ssw_455.unidade_ultima_ocorrencia
+          END,
           cubagem_m3 = EXCLUDED.cubagem_m3,
           tipo_baixa = EXCLUDED.tipo_baixa,
           valor_mercadoria = EXCLUDED.valor_mercadoria,
@@ -215,7 +227,7 @@ export async function importarSsw455(rows) {
         pesoReal, volumes, valorFrete, tipoFrete,
         dataBaixa, ocorrencia, controleDuplicidade,
         numeroNotaFiscal, previsaoEntrega, dataUltimaOcorrencia,
-        cubagemM3, tipoBaixa, valorMercadoria, setorDestino,
+        unidadeUltimaOcorrencia, cubagemM3, tipoBaixa, valorMercadoria, setorDestino,
         codigoOcorrencia,
       ]);
 
@@ -265,6 +277,7 @@ export async function importarSsw930(rows) {
       const horaOcor = (row['HORA_OCOR'] || '').trim();
       const codOcor = (row['COD_OCOR'] || '').trim().padStart(2, '0');
       const descOcor = (row['DESCRICAO_OCOR'] || '').trim();
+      const unidadeUltimaOcorrencia = normalizarUnidadeOcorrencia(row['UNID_OCOR']);
       const dataEntrega = parseBrDate(row['DATA_ENTREGA']);
       const cnpjPagador = (row['CNPJ_PAGADOR'] || '').replace(/\D/g, '');
       const nomePagador = (row['NOME_PAGADOR'] || '').trim();
@@ -278,10 +291,10 @@ export async function importarSsw930(rows) {
         const cmpData = dataOcor.localeCompare(existente.dataOcor);
         const cmpHora = horaOcor.localeCompare(existente.horaOcor);
         if (cmpData > 0 || (cmpData === 0 && cmpHora > 0)) {
-          ctrcsVistos.set(ctrcNormalizado, { dataOcor, horaOcor, codOcor, descOcor, dataEntrega, cnpjPagador, nomePagador, ctrc });
+          ctrcsVistos.set(ctrcNormalizado, { dataOcor, horaOcor, codOcor, descOcor, unidadeUltimaOcorrencia, dataEntrega, cnpjPagador, nomePagador, ctrc });
         }
       } else {
-        ctrcsVistos.set(ctrcNormalizado, { dataOcor, horaOcor, codOcor, descOcor, dataEntrega, cnpjPagador, nomePagador, ctrc });
+        ctrcsVistos.set(ctrcNormalizado, { dataOcor, horaOcor, codOcor, descOcor, unidadeUltimaOcorrencia, dataEntrega, cnpjPagador, nomePagador, ctrc });
       }
     } catch (err) {
       console.error('Erro ao processar linha SSW 930:', err.message);
@@ -295,10 +308,11 @@ export async function importarSsw930(rows) {
         UPDATE ssw_455 SET
           ocorrencia = $1,
           data_ultima_ocorrencia = $2::date,
-          codigo_ocorrencia = $3
-        WHERE ctrc_normalizado = $4
+          codigo_ocorrencia = $3,
+          unidade_ultima_ocorrencia = COALESCE($4, unidade_ultima_ocorrencia)
+        WHERE ctrc_normalizado = $5
           AND ($2::date >= data_ultima_ocorrencia OR data_ultima_ocorrencia IS NULL)
-      `, [info.descOcor, info.dataOcor, info.codOcor, ctrcNorm]);
+      `, [info.descOcor, info.dataOcor, info.codOcor, info.unidadeUltimaOcorrencia, ctrcNorm]);
 
       if (rowCount > 0) {
         atualizados++;

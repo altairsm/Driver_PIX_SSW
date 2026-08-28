@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getEficienciaMotoristas, getAppUsageMotoristas, getCtrcsParados, getCtrcsParadosDetalhado, getExpedicao, getExpedicaoAgrupada } from '../services/api';
 import * as XLSX from 'xlsx';
 import Topbar, { UNIDADE_STORAGE_KEY } from '../components/Topbar';
+import UsagePieSummary from '../components/UsagePieSummary';
 
 export default function AdminDashboard() {
   const defaultInicio = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
@@ -249,12 +250,17 @@ export default function AdminDashboard() {
         )}
 
         {activeTab === 'app' && (
-          <div style={s.section}>
+          <div style={s.section} aria-busy={loading}>
             <div style={s.sectionTitle}>Uso do App por Motorista</div>
+            <div className="usage-pie-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginTop: 16 }}>
+              <UsagePieSummary appUsage={appUsage} loading={loading} title="Total CTRCs" showNote />
+              <UsagePieSummary appUsage={appUsage.filter(r => r.tipo === 'agregado')} loading={loading} title="Agregados" />
+              <UsagePieSummary appUsage={appUsage.filter(r => r.tipo === 'funcionario')} loading={loading} title="Funcionários" />
+            </div>
             {appUsage.length === 0 ? (
-              <div style={s.empty}>Nenhum dado de uso do app encontrado.</div>
+              <div style={s.empty}>Nenhum registro encontrado para os filtros e ocorrências selecionados.</div>
             ) : (
-              <div style={s.tableWrap}>
+              <div className="app-usage-table-wrap" style={s.tableWrap}>
                 <table style={s.table}>
                   <thead>
                     <tr>
@@ -268,7 +274,7 @@ export default function AdminDashboard() {
                       <th style={{ ...s.th, minWidth: 200 }}>% APP</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody style={{ opacity: loading ? 0.55 : 1 }}>
                     {appUsage.map((a, i) => {
                       const pct = Number(a.pct_app) || 0;
                       return (

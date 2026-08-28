@@ -3,7 +3,22 @@
   border-color: #f0c040 !important;
 }
 
+.usage-summary-body {
+  flex-direction: row !important;
+}
+
+.app-usage-table-wrap {
+  overflow-x: auto !important;
+}
+
+.usage-pie-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important;
+}
+
 @media (max-width: 768px) {
+  .usage-pie-grid {
+    grid-template-columns: 1fr !important;
+  }
   .topbar-driver-row {
     flex-wrap: wrap !important;
     gap: 6px !important;
@@ -73,6 +88,27 @@
 }
 
 @media (max-width: 480px) {
+  .usage-summary-surface {
+    padding: 14px !important;
+  }
+  .usage-summary-body {
+    gap: 12px !important;
+  }
+  .usage-pie-chart {
+    width: 108px !important;
+    height: 108px !important;
+    flex-basis: 108px !important;
+  }
+  .usage-summary-surface .usage-summary-body {
+    min-height: 108px !important;
+  }
+  .usage-summary-surface .usage-summary-body > div:last-child {
+    min-width: 0 !important;
+  }
+  .usage-summary-surface .legend-row {
+    grid-template-columns: 10px minmax(54px, 1fr) 48px 42px !important;
+    column-gap: 4px !important;
+  }
   .hero {
     padding: 24px 16px 0 !important;
     gap: 16px !important;

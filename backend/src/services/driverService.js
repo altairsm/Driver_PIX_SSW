@@ -2,6 +2,10 @@ import { pool } from '../db/index.js';
 import { getConfig } from './configuracaoService.js';
 import { notificarAdiantamentoAutomatico } from './emailService.js';
 
+const APP_USAGE_OCCURRENCE_CODES = Object.freeze(['01', '03', '10', '11', '13', '38', '60']);
+const APP_USAGE_OCCURRENCE = "UPPER(COALESCE(v.ocorrencia, ''))";
+const APP_USAGE_CODE_FILTER = (paramPosition) => `LPAD(TRIM(COALESCE(v.codigo_ocorrencia, '')), 2, '0') = ANY($${paramPosition}::text[])`;
+
 export async function getDriverData(cpf) {
   const result = await pool.query(`
     SELECT cpf, nome, telefone, leu_regras, cnpj_mei, pix_tipo, bonus_d0, pre_aprovado
@@ -315,22 +319,21 @@ export async function confirmarRegras(cpf) {
 export async function getAppUsage(cpf, inicio, fim) {
   const result = await pool.query(`
     SELECT
-      COALESCE(
-        CASE
-          WHEN UPPER(v.ocorrencia) LIKE '%SSWMOBILE%' THEN 'APP'
-          WHEN UPPER(v.ocorrencia) LIKE '%OPC 038%' THEN 'BASE'
-        END,
-        'SEM ORIGEM'
-      ) AS origem,
+      CASE
+        WHEN ${APP_USAGE_OCCURRENCE} LIKE '%SSWMOBILE%' THEN 'APP'
+        WHEN ${APP_USAGE_OCCURRENCE} LIKE '%OPC 038%' THEN 'BASE'
+        ELSE 'SEM ORIGEM'
+      END AS origem,
       COUNT(*)::int AS quantidade
     FROM ssw_455 v
     JOIN ssw_ctrcs c ON c.ctrc = v.ctrc_normalizado
     JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
     WHERE r.motorista_cpf = $1
       AND c.ocorrencia_data BETWEEN $2::date AND $3::date
+      AND ${APP_USAGE_CODE_FILTER(4)}
     GROUP BY origem
     ORDER BY origem
-  `, [cpf, inicio, fim]);
+  `, [cpf, inicio, fim, APP_USAGE_OCCURRENCE_CODES]);
 
   const rows = result.rows;
   const total = rows.reduce((s, r) => s + r.quantidade, 0);
@@ -430,6 +433,9 @@ export async function getAppUsageTodos(inicio, fim, tipo, unidade) {
   if (tipo) { params.push(tipo); conditions.push(`m.tipo = $${params.length}`); }
   if (unidade) { params.push(unidade); conditions.push(`v.unidade_receptora = $${params.length}`); }
 
+  const occurrenceCodesParam = params.length + 1;
+  params.push(APP_USAGE_OCCURRENCE_CODES);
+  const occurrenceCodeFilter = APP_USAGE_CODE_FILTER(occurrenceCodesParam);
   const whereTipo = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
   const dateFilter = (col) => {
     if (inicio && fim) return `${col} >= $1 AND ${col} <= $2`;
@@ -443,16 +449,17 @@ export async function getAppUsageTodos(inicio, fim, tipo, unidade) {
       r.motorista_cpf AS cpf,
       r.motorista_nome AS nome,
       m.tipo,
-      COUNT(*) FILTER (WHERE UPPER(v.ocorrencia) LIKE '%SSWMOBILE%')::int AS app,
-      COUNT(*) FILTER (WHERE UPPER(v.ocorrencia) LIKE '%OPC 038%')::int AS base,
-      COUNT(*) FILTER (WHERE UPPER(v.ocorrencia) NOT LIKE '%SSWMOBILE%' AND UPPER(v.ocorrencia) NOT LIKE '%OPC 038%')::int AS sem_origem,
+      COUNT(*) FILTER (WHERE ${APP_USAGE_OCCURRENCE} LIKE '%SSWMOBILE%')::int AS app,
+      COUNT(*) FILTER (WHERE ${APP_USAGE_OCCURRENCE} NOT LIKE '%SSWMOBILE%' AND ${APP_USAGE_OCCURRENCE} LIKE '%OPC 038%')::int AS base,
+      COUNT(*) FILTER (WHERE ${APP_USAGE_OCCURRENCE} NOT LIKE '%SSWMOBILE%' AND ${APP_USAGE_OCCURRENCE} NOT LIKE '%OPC 038%')::int AS sem_origem,
       COUNT(*)::int AS total,
-      ROUND(COUNT(*) FILTER (WHERE UPPER(v.ocorrencia) LIKE '%SSWMOBILE%') * 100.0 / NULLIF(COUNT(*), 0), 1)::numeric(5,1) AS pct_app
+      ROUND(COUNT(*) FILTER (WHERE ${APP_USAGE_OCCURRENCE} LIKE '%SSWMOBILE%') * 100.0 / NULLIF(COUNT(*), 0), 1)::numeric(5,1) AS pct_app
     FROM ssw_455 v
     JOIN ssw_ctrcs c ON c.ctrc = v.ctrc_normalizado
     JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
     JOIN motoristas m ON m.cpf = r.motorista_cpf
     WHERE ${dateFilter('c.ocorrencia_data')} ${whereTipo}
+      AND ${occurrenceCodeFilter}
     GROUP BY r.motorista_cpf, r.motorista_nome, m.tipo
     ORDER BY pct_app DESC
   `, params);
