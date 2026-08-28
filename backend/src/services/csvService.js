@@ -264,6 +264,7 @@ export async function importarSsw455(rows) {
 export async function importarSsw930(rows) {
   let atualizados = 0;
   let erros = 0;
+  let ignorados = 0;
   const naoEncontrados = [];
   const ctrcsVistos = new Map();
 
@@ -317,7 +318,15 @@ export async function importarSsw930(rows) {
       if (rowCount > 0) {
         atualizados++;
       } else {
-        naoEncontrados.push({ ctrc: info.ctrc, cnpj_pagador: info.cnpjPagador, cliente_pagador: info.nomePagador });
+        const { rows: existe } = await pool.query(
+          'SELECT 1 FROM ssw_455 WHERE ctrc_normalizado = $1',
+          [ctrcNorm]
+        );
+        if (existe.length === 0) {
+          naoEncontrados.push({ ctrc: info.ctrc, cnpj_pagador: info.cnpjPagador, cliente_pagador: info.nomePagador });
+        } else {
+          ignorados++;
+        }
       }
     } catch (err) {
       console.error(`Erro ao atualizar CTRC ${ctrcNorm}:`, err.message);
@@ -325,5 +334,5 @@ export async function importarSsw930(rows) {
     }
   }
 
-  return { atualizados, erros, nao_encontrados: naoEncontrados };
+  return { atualizados, erros, ignorados, nao_encontrados: naoEncontrados };
 }

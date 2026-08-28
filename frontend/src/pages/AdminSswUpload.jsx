@@ -213,7 +213,10 @@ export default function AdminSswUpload() {
                 <div style={styles.resultDetails}>
                   <span>{result930.total_lidos} linhas</span>
                   <span>{result930.atualizados} CTRCs atualizados</span>
-                  <span>{result930.nao_encontrados?.length || 0} não encontrados no 455</span>
+                  {result930.ignorados > 0 && (
+                    <span>{result930.ignorados} mantidos (ocorrência mais antiga no SSW 930)</span>
+                  )}
+                  <span>{result930.nao_encontrados?.length || 0} ausentes no 455</span>
                 </div>
                 {result930.nao_encontrados?.length > 0 && (
                   <div style={{ marginTop: 12 }}>
@@ -221,7 +224,7 @@ export default function AdminSswUpload() {
                       onClick={() => setShowNaoEncontrados(!showNaoEncontrados)}
                       style={{ ...styles.importBtn, background: '#f59e0b', fontSize: '0.75rem', padding: '6px 16px' }}
                     >
-                      {showNaoEncontrados ? 'Ocultar' : 'Ver'} {result930.nao_encontrados.length} CTRCs não encontrados
+                      {showNaoEncontrados ? 'Ocultar' : 'Ver'} {result930.nao_encontrados.length} CTRCs ausentes no 455
                     </button>
                     {showNaoEncontrados && (
                       <div style={{ marginTop: 8 }}>
