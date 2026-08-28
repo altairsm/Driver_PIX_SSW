@@ -286,7 +286,7 @@ export async function importarSsw930(rows) {
       const dataOcor = parseBrDate(row['DATA_OCOR']);
       const horaOcor = (row['HORA_OCOR'] || '').trim();
       const codOcor = (row['COD_OCOR'] || '').trim().padStart(2, '0');
-      const descOcor = (row['DESCRICAO_OCOR'] || '').trim();
+      const complementoOcor = (row['COMPLEMENTO_OCOR'] || '').trim();
       const unidadeUltimaOcorrencia = normalizarUnidadeOcorrencia(row['UNID_OCOR']);
       const dataEntrega = parseBrDate(row['DATA_ENTREGA']);
       const cnpjPagador = (row['CNPJ_PAGADOR'] || '').replace(/\D/g, '');
@@ -301,10 +301,10 @@ export async function importarSsw930(rows) {
         const cmpData = dataOcor.localeCompare(existente.dataOcor);
         const cmpHora = horaOcor.localeCompare(existente.horaOcor);
         if (cmpData > 0 || (cmpData === 0 && cmpHora > 0)) {
-          ctrcsVistos.set(ctrcNormalizado, { dataOcor, horaOcor, codOcor, descOcor, unidadeUltimaOcorrencia, dataEntrega, cnpjPagador, nomePagador, ctrc });
+          ctrcsVistos.set(ctrcNormalizado, { dataOcor, horaOcor, codOcor, complementoOcor, unidadeUltimaOcorrencia, dataEntrega, cnpjPagador, nomePagador, ctrc });
         }
       } else {
-        ctrcsVistos.set(ctrcNormalizado, { dataOcor, horaOcor, codOcor, descOcor, unidadeUltimaOcorrencia, dataEntrega, cnpjPagador, nomePagador, ctrc });
+        ctrcsVistos.set(ctrcNormalizado, { dataOcor, horaOcor, codOcor, complementoOcor, unidadeUltimaOcorrencia, dataEntrega, cnpjPagador, nomePagador, ctrc });
       }
     } catch (err) {
       console.error('Erro ao processar linha SSW 930:', err.message);
@@ -314,17 +314,16 @@ export async function importarSsw930(rows) {
 
   for (const [ctrcNorm, info] of ctrcsVistos) {
     try {
-      const origem = classificarOrigem(info.descOcor);
+      const origem = info.complementoOcor ? classificarOrigem(info.complementoOcor) : null;
       const { rowCount } = await pool.query(`
         UPDATE ssw_455 SET
-          ocorrencia = $1,
-          data_ultima_ocorrencia = $2::date,
-          codigo_ocorrencia = $3,
-          unidade_ultima_ocorrencia = COALESCE($4, unidade_ultima_ocorrencia),
-          origem_ocorrencia = $5
+          data_ultima_ocorrencia = $1::date,
+          codigo_ocorrencia = $2,
+          unidade_ultima_ocorrencia = COALESCE($3, unidade_ultima_ocorrencia),
+          origem_ocorrencia = CASE WHEN $4::text IS NOT NULL THEN $5 ELSE origem_ocorrencia END
         WHERE ctrc_normalizado = $6
-          AND ($2::date >= data_ultima_ocorrencia OR data_ultima_ocorrencia IS NULL)
-      `, [info.descOcor, info.dataOcor, info.codOcor, info.unidadeUltimaOcorrencia, origem, ctrcNorm]);
+          AND ($1::date >= data_ultima_ocorrencia OR data_ultima_ocorrencia IS NULL)
+      `, [info.dataOcor, info.codOcor, info.unidadeUltimaOcorrencia, info.complementoOcor || null, origem, ctrcNorm]);
 
       if (rowCount > 0) {
         atualizados++;
