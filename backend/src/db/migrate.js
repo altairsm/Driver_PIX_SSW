@@ -48,15 +48,9 @@ export async function runMigrations() {
     )`);
     console.log('  -> ajudantes');
 
-    await pool.query(`CREATE TABLE IF NOT EXISTS ssw_romaneio_ajudantes (
-      id_romaneio VARCHAR(30) NOT NULL REFERENCES ssw_romaneios(id_romaneio),
-      ajudante_codigo VARCHAR(20) NOT NULL REFERENCES ajudantes(codigo),
-      ordem SMALLINT NOT NULL,
-      PRIMARY KEY (id_romaneio, ordem)
-    )`);
+    await pool.query(`DROP TABLE IF EXISTS ssw_romaneio_ajudantes`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_ajudantes_unidade ON ajudantes(unidade)`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_sra_ajudante ON ssw_romaneio_ajudantes(ajudante_codigo)`);
-    console.log('  -> ssw_romaneio_ajudantes');
+    console.log('  -> ajudantes (vinculo via colunas em ssw_romaneios)');
 
     await pool.query(`CREATE TABLE IF NOT EXISTS ssw_romaneios (
       id_romaneio VARCHAR(30) PRIMARY KEY,
@@ -69,6 +63,15 @@ export async function runMigrations() {
       importado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`);
     console.log('  -> ssw_romaneios');
+
+    for (const col of [
+      "ADD COLUMN IF NOT EXISTS ajudante_codigo VARCHAR(20)",
+      "ADD COLUMN IF NOT EXISTS ajudante_2_codigo VARCHAR(20)",
+      "ADD COLUMN IF NOT EXISTS ajudante_3_codigo VARCHAR(20)"
+    ]) {
+      await pool.query(`ALTER TABLE ssw_romaneios ${col}`);
+    }
+    console.log('  -> ssw_romaneios (ajudante_codigo, ajudante_2_codigo, ajudante_3_codigo)');
 
     await pool.query(`CREATE TABLE IF NOT EXISTS ssw_ctrcs (
       id VARCHAR(50) PRIMARY KEY,

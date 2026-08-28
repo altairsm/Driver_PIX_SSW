@@ -48,7 +48,10 @@ export async function atualizarAjudante(codigo, dados) {
 }
 
 export async function deletarAjudante(codigo) {
-  await pool.query('DELETE FROM ssw_romaneio_ajudantes WHERE ajudante_codigo = $1', [codigo]);
+  await pool.query(
+    'UPDATE ssw_romaneios SET ajudante_codigo = NULL, ajudante_2_codigo = NULL, ajudante_3_codigo = NULL WHERE ajudante_codigo = $1 OR ajudante_2_codigo = $1 OR ajudante_3_codigo = $1',
+    [codigo]
+  );
   const result = await pool.query('DELETE FROM ajudantes WHERE codigo = $1', [codigo]);
   return result.rowCount > 0;
 }

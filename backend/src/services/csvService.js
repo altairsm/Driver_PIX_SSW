@@ -74,40 +74,43 @@ export async function importarSsw036(rows) {
 
       const id = `${idRomaneio}|${ctrc}`;
 
+      const ajudCodigos = ['AJUDANTE', 'AJUDANTE_2', 'AJUDANTE_3'].map(col => (row[col] || '').trim().replace(/\D/g, ''));
+      for (const cod of ajudCodigos) {
+        if (!cod) continue;
+        await pool.query(
+          'INSERT INTO ajudantes (codigo) VALUES ($1) ON CONFLICT (codigo) DO NOTHING',
+          [cod]
+        );
+      }
+
       await pool.query(`
-        INSERT INTO ssw_romaneios (id_romaneio, motorista_cpf, motorista_nome, data_emissao, situacao, placa)
+        INSERT INTO ssw_romaneios (id_romaneio, motorista_cpf, motorista_nome, data_emissao, situacao, placa, ajudante_codigo, ajudante_2_codigo, ajudante_3_codigo)
         VALUES ($1, $2, $3,
           NULLIF($4, '')::date,
           NULLIF($5, ''),
-          NULLIF($6, ''))
+          NULLIF($6, ''),
+          NULLIF($7, ''),
+          NULLIF($8, ''),
+          NULLIF($9, ''))
         ON CONFLICT (id_romaneio) DO UPDATE SET
           situacao = EXCLUDED.situacao,
-          placa = EXCLUDED.placa
+          placa = EXCLUDED.placa,
+          ajudante_codigo = EXCLUDED.ajudante_codigo,
+          ajudante_2_codigo = EXCLUDED.ajudante_2_codigo,
+          ajudante_3_codigo = EXCLUDED.ajudante_3_codigo
       `, [
         idRomaneio, cpf, nomeMotorista,
         parseBrDate(row['DATA EMISSAO']),
         row['SITUACAO'] || null,
         row['PLACA'] || null,
+        ajudCodigos[0] || null,
+        ajudCodigos[1] || null,
+        ajudCodigos[2] || null,
       ]);
 
       if (!romaneioSet.has(idRomaneio)) {
         romaneioSet.add(idRomaneio);
         romaneios++;
-
-        for (const [colAjud, ordem] of [['AJUDANTE', 1], ['AJUDANTE_2', 2], ['AJUDANTE_3', 3]]) {
-          const codAjud = (row[colAjud] || '').trim().replace(/\D/g, '');
-          if (!codAjud) continue;
-          await pool.query(
-            'INSERT INTO ajudantes (codigo) VALUES ($1) ON CONFLICT (codigo) DO NOTHING',
-            [codAjud]
-          );
-          await pool.query(
-            `INSERT INTO ssw_romaneio_ajudantes (id_romaneio, ajudante_codigo, ordem)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (id_romaneio, ordem) DO UPDATE SET ajudante_codigo = EXCLUDED.ajudante_codigo`,
-            [idRomaneio, codAjud, ordem]
-          );
-        }
       }
 
       const freteStr = (row['FRETE CTRC'] || '0').replace(/\./g, '').replace(',', '.');

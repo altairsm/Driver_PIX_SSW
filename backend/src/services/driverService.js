@@ -482,7 +482,7 @@ export async function getAppUsageAjudantes(inicio, fim, tipo, unidade) {
 
   const result = await pool.query(`
     SELECT
-      ra.ajudante_codigo AS codigo,
+      r.ajudante_codigo AS codigo,
       a.nome,
       a.tipo,
       COUNT(*) FILTER (WHERE v.origem_ocorrencia = 'APP')::int AS app,
@@ -493,11 +493,10 @@ export async function getAppUsageAjudantes(inicio, fim, tipo, unidade) {
     FROM ssw_455 v
     JOIN ssw_ctrcs c ON c.ctrc = v.ctrc_normalizado
     JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
-    JOIN ssw_romaneio_ajudantes ra ON ra.id_romaneio = r.id_romaneio AND ra.ordem = 1
-    JOIN ajudantes a ON a.codigo = ra.ajudante_codigo
+    JOIN ajudantes a ON a.codigo = r.ajudante_codigo
     WHERE ${dateFilter('c.ocorrencia_data')} ${whereTipo}
       AND ${occurrenceCodeFilter}
-    GROUP BY ra.ajudante_codigo, a.nome, a.tipo
+    GROUP BY r.ajudante_codigo, a.nome, a.tipo
     ORDER BY pct_app DESC
   `, params);
   return result.rows;
