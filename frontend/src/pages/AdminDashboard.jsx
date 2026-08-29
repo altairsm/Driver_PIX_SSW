@@ -381,7 +381,7 @@ export default function AdminDashboard() {
                 const clientes = Object.keys(porCliente).sort((a, b) =>
                   porCliente[b].reduce((s, r) => s + r.total, 0) - porCliente[a].reduce((s, r) => s + r.total, 0));
                 return (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 16 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
                     {clientes.map(cliente => {
                       const dias = porCliente[cliente];
                       const totA = dias.reduce((s, r) => s + r.antecipada, 0);
@@ -400,15 +400,15 @@ export default function AdminDashboard() {
                             <span style={{ color: ESCOAMENTO_CORES.no_dia }}>■ No dia {pct(totN)}%</span>
                             <span style={{ color: ESCOAMENTO_CORES.vencida }}>■ Vencida {pct(totV)}%</span>
                           </div>
-                          <ResponsiveContainer width="100%" height={200}>
+                          <ResponsiveContainer width="100%" height={240}>
                             <BarChart data={dias} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                               <XAxis dataKey="dia" tick={{ fill: '#6b7280', fontSize: 10 }} />
                               <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} allowDecimals={false} />
                               <Tooltip contentStyle={{ background: '#161920', border: '1px solid #2a2f3e', color: '#e8eaf0' }} />
                               <Legend wrapperStyle={{ fontSize: 10 }} />
-                              <Bar dataKey="antecipada" name="Antecipada" fill={ESCOAMENTO_CORES.antecipada} />
-                              <Bar dataKey="no_dia" name="No dia" fill={ESCOAMENTO_CORES.no_dia} />
-                              <Bar dataKey="vencida" name="Vencida" fill={ESCOAMENTO_CORES.vencida} />
+                              <Bar dataKey="antecipada" name="Antecipada" stackId="a" fill={ESCOAMENTO_CORES.antecipada} />
+                              <Bar dataKey="no_dia" name="No dia" stackId="a" fill={ESCOAMENTO_CORES.no_dia} />
+                              <Bar dataKey="vencida" name="Vencida" stackId="a" fill={ESCOAMENTO_CORES.vencida} />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
