@@ -11,6 +11,12 @@ const ESCOAMENTO_CORES = {
   vencida: '#ff5a5a',
 };
 
+const fmtDia = (d) => {
+  if (!d) return d;
+  const [y, m, dd] = d.split('-');
+  return `${dd}/${m}/${y}`;
+};
+
 export default function AdminDashboard() {
   const defaultInicio = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
   const defaultFim = new Date().toISOString().slice(0, 10);
@@ -376,12 +382,26 @@ export default function AdminDashboard() {
               <div style={s.empty}>Nenhum dado de escoamento encontrado para os filtros selecionados.</div>
             ) : (
               (() => {
+                const totUA = escoamento.reduce((s, r) => s + r.antecipada, 0);
+                const totUN = escoamento.reduce((s, r) => s + r.no_dia, 0);
+                const totUV = escoamento.reduce((s, r) => s + r.vencida, 0);
+                const totU = totUA + totUN + totUV;
+                const pctU = (v) => totU > 0 ? ((v / totU) * 100).toFixed(1) : '0.0';
                 const porCliente = {};
                 escoamento.forEach(r => { (porCliente[r.cliente] = porCliente[r.cliente] || []).push(r); });
                 const clientes = Object.keys(porCliente).sort((a, b) =>
                   porCliente[b].reduce((s, r) => s + r.total, 0) - porCliente[a].reduce((s, r) => s + r.total, 0));
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+                    <div style={{ background: 'linear-gradient(180deg,#1b2030,#161920)', border: '1px solid #2a2f3e', borderRadius: 8, padding: 20, textAlign: 'center' }}>
+                      <div style={{ fontWeight: 700, color: '#f0c040', fontSize: '1.05rem', letterSpacing: '1px', marginBottom: 6 }}>TOTAL DA UNIDADE</div>
+                      <div style={{ color: '#6b7280', fontSize: '0.8rem', marginBottom: 12 }}>{totU} entregas</div>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 20, fontSize: '0.95rem', fontWeight: 700 }}>
+                        <span style={{ color: ESCOAMENTO_CORES.antecipada }}>■ Antecipada {pctU(totUA)}%</span>
+                        <span style={{ color: ESCOAMENTO_CORES.no_dia }}>■ No dia {pctU(totUN)}%</span>
+                        <span style={{ color: ESCOAMENTO_CORES.vencida }}>■ Vencida {pctU(totUV)}%</span>
+                      </div>
+                    </div>
                     {clientes.map(cliente => {
                       const dias = porCliente[cliente];
                       const totA = dias.reduce((s, r) => s + r.antecipada, 0);
@@ -391,20 +411,20 @@ export default function AdminDashboard() {
                       const pct = (v) => tot > 0 ? ((v / tot) * 100).toFixed(1) : '0.0';
                       return (
                         <div key={cliente} style={{ background: '#161920', border: '1px solid #2a2f3e', borderRadius: 8, padding: 16 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-                            <div style={{ fontWeight: 600, color: '#e8eaf0', fontSize: '0.95rem' }}>{cliente}</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 4 }}>
+                            <div style={{ fontWeight: 600, color: '#e8eaf0', fontSize: '1rem', textAlign: 'center' }}>{cliente}</div>
                             <div style={{ color: '#6b7280', fontSize: '0.72rem' }}>{tot} entregas</div>
                           </div>
-                          <div style={{ display: 'flex', gap: 12, marginBottom: 12, fontSize: '0.72rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 12, fontSize: '0.9rem', fontWeight: 700 }}>
                             <span style={{ color: ESCOAMENTO_CORES.antecipada }}>■ Antecipada {pct(totA)}%</span>
                             <span style={{ color: ESCOAMENTO_CORES.no_dia }}>■ No dia {pct(totN)}%</span>
                             <span style={{ color: ESCOAMENTO_CORES.vencida }}>■ Vencida {pct(totV)}%</span>
                           </div>
                           <ResponsiveContainer width="100%" height={240}>
                             <BarChart data={dias} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                              <XAxis dataKey="dia" tick={{ fill: '#6b7280', fontSize: 10 }} />
+                              <XAxis dataKey="dia" tick={{ fill: '#6b7280', fontSize: 10 }} tickFormatter={fmtDia} />
                               <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} allowDecimals={false} />
-                              <Tooltip contentStyle={{ background: '#161920', border: '1px solid #2a2f3e', color: '#e8eaf0' }} />
+                              <Tooltip contentStyle={{ background: '#161920', border: '1px solid #2a2f3e', color: '#e8eaf0' }} labelFormatter={fmtDia} />
                               <Legend wrapperStyle={{ fontSize: 10 }} />
                               <Bar dataKey="antecipada" name="Antecipada" stackId="a" fill={ESCOAMENTO_CORES.antecipada} />
                               <Bar dataKey="no_dia" name="No dia" stackId="a" fill={ESCOAMENTO_CORES.no_dia} />
