@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: driver-pey-db
+    container_name: ssw-db
     ports:
       - "5432:5432"
     environment:
@@ -23,8 +23,8 @@ services:
       context: ./backend
       args:
         COMMIT_HASH: ${COMMIT_HASH:-unknown}
-        VERSION: ${VERSION:-v3.7.2}
-    container_name: driver-pey-backend
+        VERSION: ${VERSION:-v3.9.1}
+    container_name: ssw-backend
     ports:
       - "3001:3001"
     environment:
@@ -45,7 +45,7 @@ services:
   frontend:
     build:
       context: ./frontend
-    container_name: driver-pey-frontend
+    container_name: ssw-frontend
     ports:
       - "8080:80"
     depends_on:
