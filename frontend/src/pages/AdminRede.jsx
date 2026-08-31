@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { getRede, getAdminQuinzenas } from '../services/api';
+import { getRede, getRedePeriodo, getPagadores } from '../services/api';
 import Topbar, { UNIDADE_STORAGE_KEY } from '../components/Topbar';
 
 const TYPE_COLOR = { unidade: '#f0c040', cliente: '#60a5fa', setor: '#3de8a0' };
@@ -9,14 +9,21 @@ const TYPE_NAME = { unidade: 'Unidade', cliente: 'Cliente', setor: 'Destinatári
 const fmtNum = (v) => Number(v || 0).toLocaleString('pt-BR');
 const fmtMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+const addDays = (isoDate, days) => {
+  const d = new Date(`${isoDate}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
 export default function AdminRede() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isLocked = user.role !== 'admin' && Boolean(user.unidade);
-  const [quinzenas, setQuinzenas] = useState([]);
+  const [clientes, setClientes] = useState([]);
   const [filtro, setFiltro] = useState({
     inicio: '',
     fim: '',
     unidade: isLocked ? user.unidade : localStorage.getItem(UNIDADE_STORAGE_KEY) || '',
+    cliente: '',
   });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -26,24 +33,35 @@ export default function AdminRede() {
   const graphRef = useRef(null);
 
   useEffect(() => {
-    getAdminQuinzenas()
-      .then(qs => {
-        setQuinzenas(qs || []);
-        if (qs?.length && !filtroRef.current.inicio) {
-          const sel = qs[0];
-          const next = { ...filtroRef.current, inicio: sel.inicio, fim: sel.fim };
-          filtroRef.current = next;
-          setFiltro(next);
-        }
+    let ativo = true;
+    getPagadores()
+      .then(lista => {
+        if (!ativo) return;
+        const ativos = (lista || [])
+          .filter(p => p.ativo)
+          .map(p => p.nome_simplificado || p.razao_social)
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b));
+        setClientes([...new Set(ativos)]);
       })
       .catch(() => {});
+    getRedePeriodo()
+      .then(periodo => {
+        if (!ativo || !periodo?.fim) return;
+        const fim = String(periodo.fim).slice(0, 10);
+        const next = { ...filtroRef.current, fim, inicio: addDays(fim, -29) };
+        filtroRef.current = next;
+        setFiltro(next);
+      })
+      .catch(() => {});
+    return () => { ativo = false; };
   }, []);
 
   const carregar = useCallback(async (f = filtroRef.current) => {
     if (!f.inicio || !f.fim) return;
     setLoading(true); setError('');
     try {
-      const r = await getRede(f.inicio, f.fim, f.unidade || null);
+      const r = await getRede(f.inicio, f.fim, f.unidade || null, f.cliente || null);
       setData(r);
     } catch { setError('Erro ao carregar a rede'); setData(null); }
     finally { setLoading(false); }
@@ -52,7 +70,7 @@ export default function AdminRede() {
   useEffect(() => { filtroRef.current = filtro; }, [filtro]);
   useEffect(() => {
     if (filtro.inicio && filtro.fim) carregar(filtroRef.current);
-  }, [carregar, filtro.inicio, filtro.fim]);
+  }, [carregar, filtro.inicio, filtro.fim, filtro.cliente]);
 
   useEffect(() => {
     const handleUnidadeChange = () => {
@@ -95,13 +113,6 @@ export default function AdminRede() {
     };
   }, [data]);
 
-  const selectQuinzena = (e) => {
-    const val = e.target.value;
-    if (!val) return;
-    const sel = quinzenas.find(q => `${q.inicio}|${q.fim}` === val);
-    if (sel) setFiltro(f => ({ ...f, inicio: sel.inicio, fim: sel.fim }));
-  };
-
   const linkWidth = (l) => Math.max(0.4, Math.min(6, Math.log2(Number(l.ctrcs) + 1)));
 
   return (
@@ -109,22 +120,11 @@ export default function AdminRede() {
       <Topbar user={user} />
       <div style={s.content}>
         <h2 style={s.title}>Rede — Unidades · Clientes · Destinatários</h2>
-        <div style={s.sub}>Fluxo de remessas por período (data da última ocorrência), ligado por unidade receptora → pagador → setor de destino</div>
+        <div style={s.sub}>Fluxo de remessas não finalizadas por período (data da última ocorrência), somente clientes e unidades ativos, ligado por unidade receptora → pagador → setor de destino</div>
 
         {error && <div style={s.error}>{error}</div>}
 
         <div style={s.filterBar}>
-          <div style={s.filterGroup}>
-            <label style={s.filterLabel}>Quinzena</label>
-            <select style={s.filterInput} value={filtro.inicio && filtro.fim ? `${filtro.inicio}|${filtro.fim}` : ''} onChange={selectQuinzena}>
-              <option value="">Selecione...</option>
-              {quinzenas.map(q => (
-                <option key={`${q.inicio}|${q.fim}`} value={`${q.inicio}|${q.fim}`}>
-                  {q.inicio} a {q.fim}
-                </option>
-              ))}
-            </select>
-          </div>
           <div style={s.filterGroup}>
             <label style={s.filterLabel}>Início</label>
             <input type="date" style={s.filterInput} value={filtro.inicio} onChange={(e) => setFiltro({ ...filtro, inicio: e.target.value })} />
@@ -132,6 +132,15 @@ export default function AdminRede() {
           <div style={s.filterGroup}>
             <label style={s.filterLabel}>Fim</label>
             <input type="date" style={s.filterInput} value={filtro.fim} onChange={(e) => setFiltro({ ...filtro, fim: e.target.value })} />
+          </div>
+          <div style={s.filterGroup}>
+            <label style={s.filterLabel}>Cliente</label>
+            <select style={s.filterInput} value={filtro.cliente} onChange={(e) => setFiltro({ ...filtro, cliente: e.target.value })}>
+              <option value="">Todos</option>
+              {clientes.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </div>
           <button type="button" style={s.filterBtn} onClick={() => carregar(filtro)} disabled={loading}>
             {loading ? 'Carregando...' : 'Filtrar'}

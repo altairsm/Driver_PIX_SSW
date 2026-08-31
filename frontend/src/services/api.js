@@ -311,10 +311,16 @@ export async function getEscoamento(inicio, fim, unidade) {
 }
 
 // Rede (synapse)
-export async function getRede(inicio, fim, unidade) {
+export async function getRede(inicio, fim, unidade, cliente) {
   const params = { inicio, fim };
   if (unidade) params.unidade = unidade;
+  if (cliente) params.cliente = cliente;
   const { data } = await api.get('/admin/rede', { params });
+  return data;
+}
+
+export async function getRedePeriodo() {
+  const { data } = await api.get('/admin/rede/periodo');
   return data;
 }
 

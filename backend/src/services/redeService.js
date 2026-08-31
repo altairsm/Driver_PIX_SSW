@@ -1,8 +1,28 @@
 import { pool } from '../db/index.js';
 
-export async function getRede(inicio, fim, unidade) {
-  const uc = unidade ? `AND v.unidade_receptora = $3` : '';
-  const p = unidade ? [inicio, fim, unidade] : [inicio, fim];
+const NOT_FINALIZADA = `
+  AND NOT EXISTS (
+    SELECT 1 FROM ocorrencia_catalogo oc
+    WHERE oc.finalizadora = true
+      AND (oc.codigo = v.codigo_ocorrencia
+           OR (v.codigo_ocorrencia IS NULL AND UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'))
+  )
+`;
+
+export async function getRede(inicio, fim, unidade, cliente) {
+  const conditions = ['v.data_ultima_ocorrencia BETWEEN $1::date AND $2::date'];
+  const params = [inicio, fim];
+
+  if (unidade) {
+    params.push(unidade);
+    conditions.push(`v.unidade_receptora = $${params.length}`);
+  }
+  if (cliente) {
+    params.push(cliente);
+    conditions.push(`COALESCE(pag.nome_simplificado, v.cliente_pagador) = $${params.length}`);
+  }
+
+  const filtroBase = conditions.join('\n  AND ') + NOT_FINALIZADA;
 
   const { rows: [row] } = await pool.query(`
     WITH base AS (
@@ -14,9 +34,8 @@ export async function getRede(inicio, fim, unidade) {
         COALESCE(v.peso_real, 0) AS peso_real,
         COALESCE(v.volumes, 0) AS volumes
       FROM ssw_455 v
-      JOIN pagadores pag ON pag.cnpj = v.cnpj_pagador
-      WHERE v.data_ultima_ocorrencia BETWEEN $1::date AND $2::date
-        ${uc}
+      JOIN pagadores pag ON pag.cnpj = v.cnpj_pagador AND pag.ativo = true
+      WHERE ${filtroBase}
     ),
     uni_nodes AS (
       SELECT b.unidade_receptora AS id, un.nome AS label,
@@ -25,7 +44,7 @@ export async function getRede(inicio, fim, unidade) {
         COALESCE(SUM(b.peso_real),0)::numeric(12,3) AS peso,
         COALESCE(SUM(b.volumes),0)::int AS volumes
       FROM base b
-      LEFT JOIN unidades un ON un.sigla = b.unidade_receptora
+      JOIN unidades un ON un.sigla = b.unidade_receptora AND un.ativo = true
       GROUP BY b.unidade_receptora, un.nome
     ),
     cli_nodes AS (
@@ -74,7 +93,21 @@ export async function getRede(inicio, fim, unidade) {
       (SELECT COALESCE(json_agg(t), '[]'::json) FROM e_uc t) AS uc,
       (SELECT COALESCE(json_agg(t), '[]'::json) FROM e_cs t) AS cs,
       (SELECT COALESCE(json_agg(t), '[]'::json) FROM e_us t) AS us
-  `, p);
+  `, params);
 
   return row;
+}
+
+export async function getRedePeriodo() {
+  const { rows: [row] } = await pool.query(`
+    SELECT MAX(v.data_ultima_ocorrencia)::date AS fim
+    FROM ssw_455 v
+    WHERE NOT EXISTS (
+      SELECT 1 FROM ocorrencia_catalogo oc
+      WHERE oc.finalizadora = true
+        AND (oc.codigo = v.codigo_ocorrencia
+             OR (v.codigo_ocorrencia IS NULL AND UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%'))
+    )
+  `);
+  return row && row.fim ? { fim: row.fim, inicio: null } : { fim: null, inicio: null };
 }

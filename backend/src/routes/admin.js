@@ -12,7 +12,7 @@ import { enviarSenhaPorEmail } from '../services/emailService.js';
 import {
   listarAjudantes, criarAjudante, atualizarAjudante, deletarAjudante
 } from '../services/ajudanteService.js';
-import { getRede } from '../services/redeService.js';
+import { getRede, getRedePeriodo } from '../services/redeService.js';
 
 const router = Router();
 
@@ -599,13 +599,23 @@ router.get('/gestao/export', async (req, res) => {
   }
 });
 
+router.get('/rede/periodo', async (req, res) => {
+  try {
+    const data = await getRedePeriodo();
+    res.json(data);
+  } catch (err) {
+    console.error('Erro ao buscar período da rede:', err);
+    res.status(500).json({ error: 'Erro ao buscar período da rede' });
+  }
+});
+
 router.get('/rede', async (req, res) => {
   try {
-    const { inicio, fim, unidade } = req.query;
+    const { inicio, fim, unidade, cliente } = req.query;
     if (!inicio || !fim) {
       return res.status(400).json({ error: 'Parâmetros inicio e fim são obrigatórios' });
     }
-    const data = await getRede(inicio, fim, unidade || null);
+    const data = await getRede(inicio, fim, unidade || null, cliente || null);
     res.json(data);
   } catch (err) {
     console.error('Erro ao buscar rede:', err);
