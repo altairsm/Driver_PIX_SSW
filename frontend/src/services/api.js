@@ -310,6 +310,14 @@ export async function getEscoamento(inicio, fim, unidade) {
   return data;
 }
 
+// Rede (synapse)
+export async function getRede(inicio, fim, unidade) {
+  const params = { inicio, fim };
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/rede', { params });
+  return data;
+}
+
 export async function getCtrcsParados(unidade) {
   const params = {};
   if (unidade) params.unidade = unidade;

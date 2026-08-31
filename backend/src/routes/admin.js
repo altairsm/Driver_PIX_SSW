@@ -12,6 +12,7 @@ import { enviarSenhaPorEmail } from '../services/emailService.js';
 import {
   listarAjudantes, criarAjudante, atualizarAjudante, deletarAjudante
 } from '../services/ajudanteService.js';
+import { getRede } from '../services/redeService.js';
 
 const router = Router();
 
@@ -595,6 +596,20 @@ router.get('/gestao/export', async (req, res) => {
   } catch (err) {
     console.error('Erro ao exportar gestão:', err);
     res.status(500).json({ error: 'Erro ao exportar dados da gestão' });
+  }
+});
+
+router.get('/rede', async (req, res) => {
+  try {
+    const { inicio, fim, unidade } = req.query;
+    if (!inicio || !fim) {
+      return res.status(400).json({ error: 'Parâmetros inicio e fim são obrigatórios' });
+    }
+    const data = await getRede(inicio, fim, unidade || null);
+    res.json(data);
+  } catch (err) {
+    console.error('Erro ao buscar rede:', err);
+    res.status(500).json({ error: 'Erro ao buscar rede' });
   }
 });
 

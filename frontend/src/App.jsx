@@ -19,7 +19,7 @@ import AdminPagadores from './pages/AdminPagadores'
 import AdminUnidades from './pages/AdminUnidades'
 import AdminGestao from './pages/AdminGestao'
 import AdminOcorrencias from './pages/AdminOcorrencias'
-
+import AdminRede from './pages/AdminRede'
 const spinKeyframes = `@keyframes spin { to { transform: rotate(360deg); } }`;
 const loadingStyle = {
   minHeight: '100vh', background: '#0d0f14', display: 'flex',
@@ -109,6 +109,7 @@ function App() {
       <Route path="/admin/unidades" element={<RoleRoute allowedRoles={['admin']}><AdminUnidades /></RoleRoute>} />
       <Route path="/admin/ocorrencias" element={<RoleRoute allowedRoles={['admin', 'operador']}><AdminOcorrencias /></RoleRoute>} />
       <Route path="/admin/gestao" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta']}><AdminGestao /></RoleRoute>} />
+      <Route path="/admin/rede" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta']}><AdminRede /></RoleRoute>} />
       <Route path="/admin/operacional" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta']}><AdminDashboard /></RoleRoute>} />
       <Route path="/admin/dashboard" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta']}><AdminDashboard /></RoleRoute>} />
       <Route path="/" element={<Navigate to="/login" replace />} />

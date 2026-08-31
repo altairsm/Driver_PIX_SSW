@@ -11,6 +11,7 @@ const GRUPOS = [
     items: [
       { label: 'Operacional', path: '/admin/operacional', roles: ['admin', 'operador', 'consulta'] },
       { label: 'Gestão', path: '/admin/gestao', roles: ['admin', 'operador', 'consulta'] },
+      { label: 'Rede', path: '/admin/rede', roles: ['admin', 'operador', 'consulta'] },
     ],
   },
   {
