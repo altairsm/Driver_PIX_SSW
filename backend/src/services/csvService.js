@@ -121,20 +121,22 @@ export async function importarSsw036(rows) {
       const qtdeStr = (row['QTDE VOL'] || '0').replace(/\D/g, '') || '0';
 
       const cep = (row['CEP ENTREGA'] || '').replace(/\D/g, '');
+      const unidade = idRomaneio.slice(0, 3).toUpperCase();
 
       await pool.query(`
         INSERT INTO ssw_ctrcs (
           id, ctrc, id_romaneio, cidade_entrega, cep, bairro, local_entrega,
           peso_calculo, frete_ctrc, qtde_vol, data_emissao,
-          ocorrencia, ocorrencia_data, ocorrencia_hora
+          ocorrencia, ocorrencia_data, ocorrencia_hora, unidade_receptora
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
           NULLIF($11, '')::date, $12,
           NULLIF($13, '')::date,
-          NULLIF($14, ''))
+          NULLIF($14, ''), $15)
         ON CONFLICT (id) DO UPDATE SET
           cidade_entrega = COALESCE(EXCLUDED.cidade_entrega, ssw_ctrcs.cidade_entrega),
           cep = COALESCE(EXCLUDED.cep, ssw_ctrcs.cep),
           bairro = COALESCE(EXCLUDED.bairro, ssw_ctrcs.bairro),
+          unidade_receptora = COALESCE(NULLIF(EXCLUDED.unidade_receptora, ''), ssw_ctrcs.unidade_receptora),
           ocorrencia = EXCLUDED.ocorrencia,
           ocorrencia_data = EXCLUDED.ocorrencia_data,
           ocorrencia_hora = EXCLUDED.ocorrencia_hora
@@ -151,6 +153,7 @@ export async function importarSsw036(rows) {
         ocorrencia,
         ocorrenciaData,
         ocorrenciaHora,
+        unidade || null,
       ]);
       ctrcs++;
     } catch (err) {
@@ -273,7 +276,7 @@ export async function importarSsw455(rows) {
       if (unidadeReceptora) {
         const result = await pool.query(`
           UPDATE ssw_ctrcs SET unidade_receptora = $1
-          WHERE REPLACE(ctrc, ' ', '') = $2 AND (unidade_receptora IS NULL OR unidade_receptora = '')
+          WHERE REPLACE(ctrc, ' ', '') = $2 AND $1 IS NOT NULL AND $1 <> ''
         `, [unidadeReceptora, ctrcNormalizado]);
         atualizados_ctrcs += result.rowCount;
       }
