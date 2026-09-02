@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getPrecosCidades, updatePrecoCidade, deletePrecoCidade, getUnidades } from '../services/api';
 import Topbar, { UNIDADE_STORAGE_KEY } from '../components/Topbar';
 
 export default function AdminSswPrecos() {
+  const [searchParams] = useSearchParams();
+  const cidadeRef = useRef(null);
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isAdmin = user.role === 'admin';
   const isLocked = !isAdmin && Boolean(user.unidade);
@@ -22,6 +25,14 @@ export default function AdminSswPrecos() {
   const [editValor, setEditValor] = useState('');
 
   const unidadeAtual = isLocked ? user.unidade : unidadeSelecionada;
+
+  useEffect(() => {
+    const cidade = searchParams.get('cidade');
+    if (cidade) {
+      setNovaCidade(cidade.toUpperCase());
+      cidadeRef.current?.focus();
+    }
+  }, [searchParams]);
 
   const fetchCidades = async (unidade) => {
     try {
@@ -127,6 +138,7 @@ export default function AdminSswPrecos() {
                   {unidades.map((u) => <option key={u} value={u}>{u}</option>)}
                 </select>
                 <input
+                  ref={cidadeRef}
                   style={styles.input}
                   placeholder="Cidade"
                   value={novaCidade}

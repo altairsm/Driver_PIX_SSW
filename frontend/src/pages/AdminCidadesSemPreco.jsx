@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getCtrcsSemPreco, getAdminQuinzenas } from '../services/api';
 import Topbar from '../components/Topbar';
 
@@ -13,6 +14,7 @@ function formatBRL(v) {
 }
 
 export default function AdminCidadesSemPreco() {
+  const navigate = useNavigate();
   const [dados, setDados] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -153,6 +155,7 @@ export default function AdminCidadesSemPreco() {
                         <th style={styles.th}>Cidade</th>
                         <th style={styles.th}>CTRCs</th>
                         <th style={styles.th}>Frete Total</th>
+                        <th style={styles.th}>Cadastro</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -161,42 +164,12 @@ export default function AdminCidadesSemPreco() {
                           <td style={styles.td}>{c.cidade || '(vazio)'}</td>
                           <td style={{ ...styles.td, color: '#ff5a5a' }}>{c.total}</td>
                           <td style={styles.td}>{formatBRL(c.frete_total)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            <div style={styles.card}>
-              <div style={styles.cardHeader}>
-                <span>Detalhamento por CTRC ({ctrcs.length})</span>
-              </div>
-              <div style={styles.cardBody}>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={styles.table}>
-                    <thead>
-                      <tr>
-                        <th style={styles.th}>CTRC</th>
-                        <th style={styles.th}>Cidade</th>
-                        <th style={styles.th}>Motorista</th>
-                        <th style={styles.th}>CPF</th>
-                        <th style={styles.th}>Data Ocorrencia</th>
-                        <th style={styles.th}>Frete</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ctrcs.map((c, i) => (
-                        <tr key={i}>
-                          <td style={styles.td}>{c.ctrc}</td>
-                          <td style={styles.td}>{c.cidade_entrega || '(vazio)'}</td>
-                          <td style={styles.td}>{c.motorista_nome}</td>
-                          <td style={styles.td}>{c.motorista_cpf}</td>
                           <td style={styles.td}>
-                            {c.ocorrencia_data ? new Date(c.ocorrencia_data).toLocaleDateString('pt-BR') : '—'}
+                            <button
+                              onClick={() => navigate(`/admin/precos-cidades?cidade=${encodeURIComponent((c.cidade || '').split('/')[0].trim())}`)}
+                              style={styles.cadastrarBtn}
+                            >Cadastrar</button>
                           </td>
-                          <td style={{ ...styles.td, color: '#3de8a0' }}>{formatBRL(c.frete_ctrc)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -234,4 +207,5 @@ const styles = {
   table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' },
   th: { padding: '10px 14px', textAlign: 'left', color: '#6b7280', borderBottom: '1px solid #2a2f3e', background: '#1e2230', fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '1px' },
   td: { padding: '10px 14px', borderBottom: '1px solid #2a2f3e', color: '#e8eaf0', fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.75rem' },
+  cadastrarBtn: { background: '#f0c040', color: '#0d0f14', border: 'none', padding: '6px 14px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.72rem', fontFamily: "'IBM Plex Mono', monospace" },
 };

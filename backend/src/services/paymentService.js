@@ -1,7 +1,7 @@
 import { pool } from '../db/index.js';
 
 export async function calcularPagamentos(inicio, fim, unidade) {
-  const unidadeClause = unidade ? `AND v455.unidade_receptora = $3` : '';
+  const unidadeClause = unidade ? `AND c.unidade_receptora = $3` : '';
   const params = unidade ? [inicio, fim, unidade] : [inicio, fim];
 
   const query = `
@@ -14,17 +14,16 @@ export async function calcularPagamentos(inicio, fim, unidade) {
         c.id_romaneio,
         COALESCE(c.frete_ctrc, 0) AS frete_ctrc,
         COALESCE(pc.valor_entrega, 0) AS valor_despesa,
-        v455.unidade_receptora
+        c.unidade_receptora
       FROM ssw_ctrcs c
       JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
       LEFT JOIN LATERAL (
         SELECT valor_entrega FROM tabela_preco_cidade pc
         WHERE LOWER(pc.cidade) = LOWER(TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)))
            OR LOWER(pc.cidade) = LOWER(TRIM(c.cidade_entrega))
-        ORDER BY (pc.unidade = COALESCE(v455.unidade_receptora, '')) DESC, pc.unidade
+        ORDER BY (pc.unidade = COALESCE(c.unidade_receptora, '')) DESC, pc.unidade
         LIMIT 1
       ) pc ON true
-      LEFT JOIN ssw_455 v455 ON v455.ctrc_normalizado = REPLACE(c.ctrc, ' ', '')
       WHERE c.ocorrencia_data BETWEEN $1::date AND $2::date
         AND EXISTS (SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%')
         ${unidadeClause}
