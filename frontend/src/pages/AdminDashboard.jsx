@@ -17,6 +17,13 @@ const fmtDia = (d) => {
   return `${dd}/${m}/${y}`;
 };
 
+const dataLocalISO = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+};
+
 export default function AdminDashboard() {
   const defaultInicio = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
   const defaultFim = new Date().toISOString().slice(0, 10);
@@ -41,6 +48,17 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('eficiencia');
+  const [periodoAtivo, setPeriodoAtivo] = useState(null);
+
+  const aplicarPeriodo = (dias) => {
+    const hoje = new Date();
+    const inicio = dias === 0 ? hoje : new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - dias);
+    const chave = dias === 0 ? 'hoje' : String(dias);
+    const next = { ...filtro, inicio: dataLocalISO(inicio), fim: dataLocalISO(hoje) };
+    setFiltro(next);
+    setPeriodoAtivo(chave);
+    carregar(next);
+  };
 
   const carregar = useCallback(async (f = filtroRef.current) => {
     setLoading(true);
@@ -189,12 +207,28 @@ export default function AdminDashboard() {
           <div style={s.filterGroup}>
             <label style={s.filterLabel}>Inicio</label>
             <input type="date" style={s.filterInput} value={filtro.inicio}
-              onChange={(e) => setFiltro({ ...filtro, inicio: e.target.value })} />
+              onChange={(e) => { setPeriodoAtivo(null); setFiltro({ ...filtro, inicio: e.target.value }); }} />
           </div>
           <div style={s.filterGroup}>
             <label style={s.filterLabel}>Fim</label>
             <input type="date" style={s.filterInput} value={filtro.fim}
-              onChange={(e) => setFiltro({ ...filtro, fim: e.target.value })} />
+              onChange={(e) => { setPeriodoAtivo(null); setFiltro({ ...filtro, fim: e.target.value }); }} />
+          </div>
+          <div style={s.filterGroup}>
+            <label style={s.filterLabel}>Período</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[
+                { chave: 'hoje', rotulo: 'Hoje', dias: 0 },
+                { chave: '7', rotulo: '7 dias', dias: 7 },
+                { chave: '30', rotulo: '30 dias', dias: 30 },
+              ].map(b => (
+                <button key={b.chave} type="button"
+                  style={{ ...s.periodoBtn, ...(periodoAtivo === b.chave ? s.periodoBtnAtivo : {}) }}
+                  onClick={() => aplicarPeriodo(b.dias)}>
+                  {b.rotulo}
+                </button>
+              ))}
+            </div>
           </div>
           <div style={s.filterGroup}>
             <label style={s.filterLabel}>Tipo</label>
@@ -709,6 +743,8 @@ const s = {
   filterLabel: { fontSize: '0.65rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '1px' },
   filterInput: { background: '#1e2230', border: '1px solid #2a2f3e', color: '#e8eaf0', padding: '8px 12px', borderRadius: 4, fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.82rem', minWidth: 150 },
   filterBtn: { background: '#f0c040', color: '#0d0f14', border: 'none', padding: '9px 24px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', fontFamily: "'IBM Plex Mono', monospace", marginBottom: 1 },
+  periodoBtn: { background: '#1e2230', border: '1px solid #2a2f3e', color: '#e8eaf0', padding: '8px 12px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.78rem', fontFamily: "'IBM Plex Mono', monospace" },
+  periodoBtnAtivo: { background: '#f0c040', color: '#0d0f14', border: '1px solid #f0c040' },
   tabBar: { display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' },
   tabBtn: { background: '#1e2230', border: '1px solid #2a2f3e', color: '#6b7280', padding: '10px 20px', borderRadius: 4, cursor: 'pointer', fontSize: '0.85rem', fontFamily: "'IBM Plex Mono', monospace", transition: 'all .15s' },
   tabBtnActive: { background: '#1e2230', borderColor: '#f0c040', color: '#f0c040' },
