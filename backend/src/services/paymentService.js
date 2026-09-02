@@ -338,7 +338,7 @@ export async function getCtrcsParadosDetalhado(unidade) {
 
 export async function getCustoDaBase(inicio, fim, unidade) {
   const params = [inicio, fim];
-  const unidadeClause = unidade ? `AND v455.unidade_receptora = $3` : '';
+  const unidadeClause = unidade ? `AND c.unidade_receptora = $3` : '';
   if (unidade) params.push(unidade);
 
   const result = await pool.query(`
@@ -349,21 +349,20 @@ export async function getCustoDaBase(inicio, fim, unidade) {
       COUNT(*)::int AS quantidade,
       COALESCE(MAX(pc.valor_entrega), 0)::numeric(10,2) AS valor_unitario,
       COALESCE(SUM(pc.valor_entrega), 0)::numeric(10,2) AS valor_total_cidade,
-      v455.unidade_receptora
+      c.unidade_receptora
     FROM ssw_ctrcs c
     JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
     LEFT JOIN LATERAL (
       SELECT valor_entrega FROM tabela_preco_cidade pc
       WHERE LOWER(pc.cidade) = LOWER(TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)))
          OR LOWER(pc.cidade) = LOWER(TRIM(c.cidade_entrega))
-      ORDER BY (pc.unidade = COALESCE(v455.unidade_receptora, '')) DESC, pc.unidade
+      ORDER BY (pc.unidade = COALESCE(c.unidade_receptora, '')) DESC, pc.unidade
       LIMIT 1
     ) pc ON true
-    LEFT JOIN ssw_455 v455 ON v455.ctrc_normalizado = REPLACE(c.ctrc, ' ', '')
     WHERE c.ocorrencia_data BETWEEN $1::date AND $2::date
       AND EXISTS (SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%')
       ${unidadeClause}
-    GROUP BY r.motorista_cpf, r.motorista_nome, TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)), v455.unidade_receptora
+    GROUP BY r.motorista_cpf, r.motorista_nome, TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)), c.unidade_receptora
     ORDER BY r.motorista_nome, r.motorista_cpf, cidade
   `, params);
 
