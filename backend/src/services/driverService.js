@@ -26,6 +26,7 @@ export async function getDriverDashboard(cpf, inicio, fim) {
       SELECT valor_entrega FROM tabela_preco_cidade pc
       WHERE LOWER(pc.cidade) = LOWER(TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)))
          OR LOWER(pc.cidade) = LOWER(TRIM(c.cidade_entrega))
+      ORDER BY (pc.unidade = COALESCE(c.unidade_receptora, '')) DESC, pc.unidade
       LIMIT 1
     ) pc ON true
     WHERE r.motorista_cpf = $1
@@ -55,6 +56,7 @@ export async function getDriverRomaneios(cpf, inicio, fim) {
       SELECT valor_entrega FROM tabela_preco_cidade pc
       WHERE LOWER(pc.cidade) = LOWER(TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)))
          OR LOWER(pc.cidade) = LOWER(TRIM(c.cidade_entrega))
+      ORDER BY (pc.unidade = COALESCE(c.unidade_receptora, '')) DESC, pc.unidade
       LIMIT 1
     ) pc ON true
     WHERE r.motorista_cpf = $1
@@ -78,6 +80,7 @@ export async function getDriverRomaneioDetalhes(cpf, idRomaneio, inicio, fim) {
       SELECT valor_entrega FROM tabela_preco_cidade pc
       WHERE LOWER(pc.cidade) = LOWER(TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)))
          OR LOWER(pc.cidade) = LOWER(TRIM(c.cidade_entrega))
+      ORDER BY (pc.unidade = COALESCE(c.unidade_receptora, '')) DESC, pc.unidade
       LIMIT 1
     ) pc ON true
     WHERE c.id_romaneio = $1
@@ -129,6 +132,7 @@ export async function getProdutividade(cpf, inicio, fim) {
       SELECT valor_entrega FROM tabela_preco_cidade pc
       WHERE LOWER(pc.cidade) = LOWER(TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)))
          OR LOWER(pc.cidade) = LOWER(TRIM(c.cidade_entrega))
+      ORDER BY (pc.unidade = COALESCE(c.unidade_receptora, '')) DESC, pc.unidade
       LIMIT 1
     ) pc ON true
     WHERE r.motorista_cpf = $1
@@ -197,6 +201,7 @@ export async function solicitarPagamento(cpf, idRomaneio) {
       SELECT valor_entrega FROM tabela_preco_cidade pc
       WHERE LOWER(pc.cidade) = LOWER(TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)))
          OR LOWER(pc.cidade) = LOWER(TRIM(c.cidade_entrega))
+      ORDER BY (pc.unidade = COALESCE(c.unidade_receptora, '')) DESC, pc.unidade
       LIMIT 1
     ) pc ON true
     WHERE c.id_romaneio = $1

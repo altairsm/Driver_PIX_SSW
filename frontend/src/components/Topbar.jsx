@@ -9,9 +9,9 @@ const GRUPOS = [
     nome: 'Desempenho',
     icon: '📊',
     items: [
-      { label: 'Operacional', path: '/admin/operacional', roles: ['admin', 'operador', 'consulta'] },
-      { label: 'Gestão', path: '/admin/gestao', roles: ['admin', 'operador', 'consulta'] },
-      { label: 'Rede', path: '/admin/rede', roles: ['admin', 'operador', 'consulta'] },
+      { label: 'Operacional', path: '/admin/operacional', roles: ['admin', 'operador', 'consulta', 'financeiro'] },
+      { label: 'Gestão', path: '/admin/gestao', roles: ['admin', 'operador', 'consulta', 'financeiro'] },
+      { label: 'Rede', path: '/admin/rede', roles: ['admin', 'operador', 'consulta', 'financeiro'] },
     ],
   },
   {
@@ -32,6 +32,7 @@ const GRUPOS = [
       { label: 'Pagadores', path: '/admin/pagadores', roles: ['admin'] },
       { label: 'Precos Cidades', path: '/admin/precos-cidades', roles: ['admin'] },
       { label: 'Cidades s/ Preco', path: '/admin/cidades-sem-preco', roles: ['admin'] },
+      { label: 'Custo da Base', path: '/admin/custo-da-base', roles: ['admin', 'financeiro'] },
     ],
   },
   {

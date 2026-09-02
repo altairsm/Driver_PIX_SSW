@@ -116,11 +116,31 @@ export async function runMigrations() {
     }
 
     await pool.query(`CREATE TABLE IF NOT EXISTS tabela_preco_cidade (
-      cidade VARCHAR(100) PRIMARY KEY,
+      cidade VARCHAR(100) NOT NULL,
+      unidade VARCHAR(10) DEFAULT '',
       valor_entrega NUMERIC(10,2) NOT NULL,
-      atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (cidade, unidade)
     )`);
     console.log('  -> tabela_preco_cidade');
+
+    const { rows: [{ has_unidade }] } = await pool.query(`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tabela_preco_cidade' AND column_name = 'unidade'
+      ) AS has_unidade
+    `);
+    if (!has_unidade) {
+      await pool.query(`ALTER TABLE tabela_preco_cidade DROP CONSTRAINT IF EXISTS tabela_preco_cidade_pkey`);
+      await pool.query(`ALTER TABLE tabela_preco_cidade ADD COLUMN unidade VARCHAR(10) DEFAULT ''`);
+      await pool.query(`UPDATE tabela_preco_cidade SET unidade = '' WHERE unidade IS NULL`);
+      await pool.query(`ALTER TABLE tabela_preco_cidade ALTER COLUMN cidade SET NOT NULL`);
+      await pool.query(`ALTER TABLE tabela_preco_cidade ALTER COLUMN unidade SET NOT NULL`);
+      await pool.query(`ALTER TABLE tabela_preco_cidade ADD PRIMARY KEY (cidade, unidade)`);
+      console.log('  -> tabela_preco_cidade migrated to composite PK (cidade, unidade)');
+    } else {
+      await pool.query(`UPDATE tabela_preco_cidade SET unidade = '' WHERE unidade IS NULL`);
+    }
 
     await pool.query(`CREATE TABLE IF NOT EXISTS solicitacoes_pagamento (
       id SERIAL PRIMARY KEY,
@@ -460,14 +480,14 @@ export async function runMigrations() {
     console.log('Migrations: checking seed data...');
 
     await seedIfEmpty('tabela_preco_cidade', `
-      INSERT INTO tabela_preco_cidade (cidade, valor_entrega) VALUES
-      ('SALVADOR', 5.00),
-      ('LAURO DE FREITAS', 7.00),
-      ('CAMAÇARI', 7.00),
-      ('SIMÕES FILHO', 6.00),
-      ('DIAS D''ÁVILA', 8.00),
-      ('MATA DE SÃO JOÃO', 9.00),
-      ('FEIRA DE SANTANA', 10.00)
+      INSERT INTO tabela_preco_cidade (cidade, unidade, valor_entrega) VALUES
+      ('SALVADOR', '', 5.00),
+      ('LAURO DE FREITAS', '', 7.00),
+      ('CAMAÇARI', '', 7.00),
+      ('SIMÕES FILHO', '', 6.00),
+      ('DIAS D''ÁVILA', '', 8.00),
+      ('MATA DE SÃO JOÃO', '', 9.00),
+      ('FEIRA DE SANTANA', '', 10.00)
     `);
 
     await pool.query(`

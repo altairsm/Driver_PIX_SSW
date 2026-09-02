@@ -21,6 +21,7 @@ export async function calcularPagamentos(inicio, fim, unidade) {
         SELECT valor_entrega FROM tabela_preco_cidade pc
         WHERE LOWER(pc.cidade) = LOWER(TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)))
            OR LOWER(pc.cidade) = LOWER(TRIM(c.cidade_entrega))
+        ORDER BY (pc.unidade = COALESCE(v455.unidade_receptora, '')) DESC, pc.unidade
         LIMIT 1
       ) pc ON true
       LEFT JOIN ssw_455 v455 ON v455.ctrc_normalizado = REPLACE(c.ctrc, ' ', '')
@@ -89,6 +90,7 @@ export async function confirmarPagamento(cpf, periodo) {
       SELECT valor_entrega FROM tabela_preco_cidade pc
       WHERE LOWER(pc.cidade) = LOWER(TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)))
          OR LOWER(pc.cidade) = LOWER(TRIM(c.cidade_entrega))
+      ORDER BY (pc.unidade = COALESCE(c.unidade_receptora, '')) DESC, pc.unidade
       LIMIT 1
     ) pc ON true
     WHERE r.motorista_cpf = $1
@@ -210,11 +212,12 @@ export async function deletarMotorista(cpf) {
   return result.rowCount > 0;
 }
 
-export async function getCidadesSemPreco(inicio, fim) {
+export async function getCidadesSemPreco(inicio, fim, unidade) {
   const query = `
     SELECT
       c.ctrc,
       c.cidade_entrega,
+      c.unidade_receptora,
       c.ocorrencia_data,
       c.frete_ctrc,
       r.motorista_cpf,
@@ -223,18 +226,20 @@ export async function getCidadesSemPreco(inicio, fim) {
     FROM ssw_ctrcs c
     JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
     LEFT JOIN LATERAL (
-      SELECT cidade FROM tabela_preco_cidade pc
+      SELECT cidade, unidade FROM tabela_preco_cidade pc
       WHERE LOWER(pc.cidade) = LOWER(TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)))
          OR LOWER(pc.cidade) = LOWER(TRIM(c.cidade_entrega))
+      ORDER BY (pc.unidade = COALESCE(c.unidade_receptora, '')) DESC, pc.unidade
       LIMIT 1
     ) pc ON true
     WHERE pc.cidade IS NULL
       AND EXISTS (SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%')
       AND ($1::date IS NULL OR c.ocorrencia_data >= $1::date)
       AND ($2::date IS NULL OR c.ocorrencia_data <= $2::date)
+      AND ($3::text IS NULL OR c.unidade_receptora = $3)
     ORDER BY c.cidade_entrega, c.ocorrencia_data DESC
   `;
-  const result = await pool.query(query, [inicio || null, fim || null]);
+  const result = await pool.query(query, [inicio || null, fim || null, unidade || null]);
   const ctrcs = result.rows;
 
   const cidadesMap = new Map();
@@ -329,4 +334,74 @@ export async function getCtrcsParadosDetalhado(unidade) {
     ORDER BY c.data_emissao ASC
   `, params);
   return result.rows;
+}
+
+export async function getCustoDaBase(inicio, fim, unidade) {
+  const params = [inicio, fim];
+  const unidadeClause = unidade ? `AND v455.unidade_receptora = $3` : '';
+  if (unidade) params.push(unidade);
+
+  const result = await pool.query(`
+    SELECT
+      r.motorista_cpf,
+      r.motorista_nome,
+      TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)) AS cidade,
+      COUNT(*)::int AS quantidade,
+      COALESCE(MAX(pc.valor_entrega), 0)::numeric(10,2) AS valor_unitario,
+      COALESCE(SUM(pc.valor_entrega), 0)::numeric(10,2) AS valor_total_cidade,
+      v455.unidade_receptora
+    FROM ssw_ctrcs c
+    JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
+    LEFT JOIN LATERAL (
+      SELECT valor_entrega FROM tabela_preco_cidade pc
+      WHERE LOWER(pc.cidade) = LOWER(TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)))
+         OR LOWER(pc.cidade) = LOWER(TRIM(c.cidade_entrega))
+      ORDER BY (pc.unidade = COALESCE(v455.unidade_receptora, '')) DESC, pc.unidade
+      LIMIT 1
+    ) pc ON true
+    LEFT JOIN ssw_455 v455 ON v455.ctrc_normalizado = REPLACE(c.ctrc, ' ', '')
+    WHERE c.ocorrencia_data BETWEEN $1::date AND $2::date
+      AND EXISTS (SELECT 1 FROM ocorrencia_catalogo oc WHERE oc.finalizadora = true AND UPPER(c.ocorrencia) LIKE UPPER(oc.descricao) || '%')
+      ${unidadeClause}
+    GROUP BY r.motorista_cpf, r.motorista_nome, TRIM(SPLIT_PART(c.cidade_entrega, '/', 1)), v455.unidade_receptora
+    ORDER BY r.motorista_nome, r.motorista_cpf, cidade
+  `, params);
+
+  const linhas = result.rows;
+  const porMotorista = new Map();
+  let totalGeral = 0;
+  let entregasGeral = 0;
+
+  for (const row of linhas) {
+    const chave = row.motorista_cpf;
+    if (!porMotorista.has(chave)) {
+      porMotorista.set(chave, {
+        motorista_cpf: row.motorista_cpf,
+        motorista_nome: row.motorista_nome,
+        unidade_receptora: row.unidade_receptora || null,
+        cidades: [],
+        total: 0,
+        entregas: 0,
+      });
+    }
+    const motorista = porMotorista.get(chave);
+    const valor = Number(row.valor_total_cidade) || 0;
+    motorista.cidades.push({
+      cidade: row.cidade,
+      quantidade: row.quantidade,
+      valor_unitario: Number(row.valor_unitario) || 0,
+      valor_total: valor,
+      sem_preco: !(Number(row.valor_unitario) > 0),
+    });
+    motorista.total += valor;
+    motorista.entregas += row.quantidade;
+    totalGeral += valor;
+    entregasGeral += row.quantidade;
+  }
+
+  const motoristas = [...porMotorista.values()]
+    .map((m) => ({ ...m, total: m.total, entregas: m.entregas }))
+    .sort((a, b) => a.motorista_nome.localeCompare(b.motorista_nome));
+
+  return { motoristas, total_geral: totalGeral, entregas_geral: entregasGeral, periodo: { inicio, fim }, unidade: unidade || null };
 }

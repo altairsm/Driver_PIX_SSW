@@ -249,24 +249,40 @@ export async function previewSswCsv(file) {
 }
 
 // Precos Cidades
-export async function getPrecosCidades() {
-  const { data } = await api.get('/admin/precos-cidades');
+export async function getPrecosCidades(unidade) {
+  const params = {};
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/precos-cidades', { params });
   return data;
 }
 
-export async function updatePrecoCidade(cidade, valor_entrega) {
-  const { data } = await api.put('/admin/precos-cidades', { cidade, valor_entrega });
+export async function updatePrecoCidade(cidade, valor_entrega, unidade) {
+  const { data } = await api.put('/admin/precos-cidades', { cidade, valor_entrega, unidade });
   return data;
 }
 
-export async function deletePrecoCidade(cidade) {
-  const { data } = await api.delete(`/admin/precos-cidades/${encodeURIComponent(cidade)}`);
+export async function deletePrecoCidade(cidade, unidade) {
+  const params = {};
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.delete(`/admin/precos-cidades/${encodeURIComponent(cidade)}`, { params });
+  return data;
+}
+
+// Custo da Base
+export async function getCustoDaBase(inicio, fim, unidade) {
+  const params = {};
+  if (inicio) params.inicio = inicio;
+  if (fim) params.fim = fim;
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/custo-da-base', { params });
   return data;
 }
 
 // CTRCs sem preco
-export async function getCtrcsSemPreco(inicio, fim) {
-  const { data } = await api.get('/admin/ctrcs-sem-preco', { params: { inicio, fim } });
+export async function getCtrcsSemPreco(inicio, fim, unidade) {
+  const params = { inicio, fim };
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/ctrcs-sem-preco', { params });
   return data;
 }
 

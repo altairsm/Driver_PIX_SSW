@@ -102,13 +102,13 @@ export default function AdminMotoristas() {
   };
 
   const roleLabel = (role) => {
-    const labels = { motorista: 'Motorista', admin: 'Admin', operador: 'Operador', consulta: 'Consulta' };
+    const labels = { motorista: 'Motorista', admin: 'Admin', operador: 'Operador', consulta: 'Consulta', financeiro: 'Financeiro' };
     return labels[role] || role;
   };
 
   const roleBadgeStyle = (role) => ({
     display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: '0.68rem', fontWeight: 600,
-    background: role === 'admin' ? '#dc3545' : role === 'operador' ? '#0d6efd' : role === 'consulta' ? '#6c757d' : '#198754',
+    background: role === 'admin' ? '#dc3545' : role === 'operador' ? '#0d6efd' : role === 'consulta' ? '#6c757d' : role === 'financeiro' ? '#7c3aed' : '#198754',
     color: '#fff',
   });
 
@@ -227,10 +227,11 @@ export default function AdminMotoristas() {
                     <option value="admin">Admin</option>
                     <option value="operador">Operador</option>
                     <option value="consulta">Consulta</option>
+                    <option value="financeiro">Financeiro</option>
                   </select>
                 </div>
                 <div style={s.field}>
-                  <label style={s.label}>Unidade (para operador/consulta)</label>
+                  <label style={s.label}>Unidade (para operador/consulta/financeiro)</label>
                   <select style={s.select} name="unidade" value={form.unidade} onChange={handleChange}>
                     <option value="">Todas (admin)</option>
                     {unidades.map(u => <option key={u} value={u}>{u}</option>)}

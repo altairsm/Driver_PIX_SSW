@@ -20,6 +20,7 @@ import AdminUnidades from './pages/AdminUnidades'
 import AdminGestao from './pages/AdminGestao'
 import AdminOcorrencias from './pages/AdminOcorrencias'
 import AdminRede from './pages/AdminRede'
+import AdminCustoDaBase from './pages/AdminCustoDaBase'
 const spinKeyframes = `@keyframes spin { to { transform: rotate(360deg); } }`;
 const loadingStyle = {
   minHeight: '100vh', background: '#0d0f14', display: 'flex',
@@ -108,10 +109,11 @@ function App() {
       <Route path="/admin/pagadores" element={<RoleRoute allowedRoles={['admin']}><AdminPagadores /></RoleRoute>} />
       <Route path="/admin/unidades" element={<RoleRoute allowedRoles={['admin']}><AdminUnidades /></RoleRoute>} />
       <Route path="/admin/ocorrencias" element={<RoleRoute allowedRoles={['admin', 'operador']}><AdminOcorrencias /></RoleRoute>} />
-      <Route path="/admin/gestao" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta']}><AdminGestao /></RoleRoute>} />
-      <Route path="/admin/rede" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta']}><AdminRede /></RoleRoute>} />
-      <Route path="/admin/operacional" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta']}><AdminDashboard /></RoleRoute>} />
-      <Route path="/admin/dashboard" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta']}><AdminDashboard /></RoleRoute>} />
+      <Route path="/admin/gestao" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta', 'financeiro']}><AdminGestao /></RoleRoute>} />
+      <Route path="/admin/rede" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta', 'financeiro']}><AdminRede /></RoleRoute>} />
+      <Route path="/admin/custo-da-base" element={<RoleRoute allowedRoles={['admin', 'financeiro']}><AdminCustoDaBase /></RoleRoute>} />
+      <Route path="/admin/operacional" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta', 'financeiro']}><AdminDashboard /></RoleRoute>} />
+      <Route path="/admin/dashboard" element={<RoleRoute allowedRoles={['admin', 'operador', 'consulta', 'financeiro']}><AdminDashboard /></RoleRoute>} />
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

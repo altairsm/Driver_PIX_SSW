@@ -49,15 +49,15 @@ app.get('/version', (req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/driver', driverRoutes);
-app.use('/admin', authenticateToken, requireRole('admin', 'operador', 'consulta'));
+app.use('/admin', authenticateToken, requireRole('admin', 'operador', 'consulta', 'financeiro'));
 app.use('/admin', adminRoutes);
 app.use('/upload', authenticateToken, requireRole('admin', 'operador'), uploadRoutes);
 app.use('/configuracoes', authenticateToken, configuracoesRoutes);
 app.use('/taxas-adiantamento', authenticateToken, taxasAdiantamentoRoutes);
-app.use('/admin', authenticateToken, requireRole('admin', 'operador', 'consulta'), solicitacoesRoutes);
-app.use('/admin', authenticateToken, requireRole('admin', 'operador', 'consulta'), pagadoresRoutes);
-app.use('/admin', authenticateToken, requireRole('admin', 'operador', 'consulta'), ocorrenciasRoutes);
-app.use('/admin', authenticateToken, requireRole('admin', 'operador', 'consulta'), unidadesRoutes);
+app.use('/admin', authenticateToken, requireRole('admin', 'operador', 'consulta', 'financeiro'), solicitacoesRoutes);
+app.use('/admin', authenticateToken, requireRole('admin', 'operador', 'consulta', 'financeiro'), pagadoresRoutes);
+app.use('/admin', authenticateToken, requireRole('admin', 'operador', 'consulta', 'financeiro'), ocorrenciasRoutes);
+app.use('/admin', authenticateToken, requireRole('admin', 'operador', 'consulta', 'financeiro'), unidadesRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);

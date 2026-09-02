@@ -5,7 +5,7 @@ import { requireRole } from '../middleware/auth.js';
 import {
   calcularPagamentos, confirmarPagamento,
   listarMotoristas, criarMotorista, atualizarMotorista, deletarMotorista,
-  getQuinzenasAdmin, getCidadesSemPreco, getCtrcsParados, getCtrcsParadosDetalhado
+  getQuinzenasAdmin, getCidadesSemPreco, getCtrcsParados, getCtrcsParadosDetalhado, getCustoDaBase
 } from '../services/paymentService.js';
 import { getEficienciaTodos, getAppUsageTodos, getAppUsageAjudantes, getEscoamento } from '../services/driverService.js';
 import { enviarSenhaPorEmail } from '../services/emailService.js';
@@ -133,9 +133,38 @@ router.get('/resumo', async (req, res) => {
   }
 });
 
+router.get('/custo-da-base', requireRole('admin', 'operador', 'consulta', 'financeiro'), async (req, res) => {
+  try {
+    const { inicio, fim } = req.query;
+    const isAdmin = req.user?.role === 'admin';
+    let unidade = req.query.unidade || null;
+    if (!isAdmin && req.user?.unidade) unidade = req.user.unidade;
+
+    const resultado = await getCustoDaBase(inicio || null, fim || null, unidade);
+    res.json(resultado);
+  } catch (err) {
+    console.error('Erro ao gerar custo da base:', err);
+    res.status(500).json({ error: 'Erro ao gerar custo da base' });
+  }
+});
+
 router.get('/precos-cidades', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM tabela_preco_cidade ORDER BY cidade');
+    const isAdmin = req.user?.role === 'admin';
+    let unidade = req.query.unidade || '';
+    if (!isAdmin && req.user?.unidade) unidade = req.user.unidade;
+
+    let rows;
+    if (unidade) {
+      const { rows: r } = await pool.query(
+        'SELECT * FROM tabela_preco_cidade WHERE unidade = $1 ORDER BY cidade',
+        [unidade]
+      );
+      rows = r;
+    } else {
+      const { rows: r } = await pool.query('SELECT * FROM tabela_preco_cidade ORDER BY unidade, cidade');
+      rows = r;
+    }
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -145,16 +174,19 @@ router.get('/precos-cidades', async (req, res) => {
 
 router.put('/precos-cidades', requireRole('admin'), async (req, res) => {
   try {
-    const { cidade, valor_entrega } = req.body;
+    const { cidade, valor_entrega, unidade } = req.body;
     if (!cidade || valor_entrega === undefined) {
       return res.status(400).json({ error: 'cidade e valor_entrega são obrigatórios' });
     }
 
+    const cidadeLimpa = (cidade.toUpperCase().split('/')[0]).trim();
+    const unidadeFinal = (unidade || '').trim();
+
     await pool.query(`
-      INSERT INTO tabela_preco_cidade (cidade, valor_entrega)
-      VALUES ($1, $2)
-      ON CONFLICT (cidade) DO UPDATE SET valor_entrega = $2, atualizado_em = CURRENT_TIMESTAMP
-    `, [cidade.toUpperCase(), parseFloat(valor_entrega)]);
+      INSERT INTO tabela_preco_cidade (cidade, unidade, valor_entrega)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (cidade, unidade) DO UPDATE SET valor_entrega = $3, atualizado_em = CURRENT_TIMESTAMP
+    `, [cidadeLimpa, unidadeFinal, parseFloat(valor_entrega)]);
 
     res.json({ success: true });
   } catch (err) {
@@ -166,7 +198,14 @@ router.put('/precos-cidades', requireRole('admin'), async (req, res) => {
 router.delete('/precos-cidades/:cidade', requireRole('admin'), async (req, res) => {
   try {
     const { cidade } = req.params;
-    await pool.query('DELETE FROM tabela_preco_cidade WHERE cidade = $1', [cidade.toUpperCase()]);
+    const unidade = (req.query.unidade || '').trim();
+    const cidadeLimpa = cidade.toUpperCase().split('/')[0].trim();
+
+    if (unidade) {
+      await pool.query('DELETE FROM tabela_preco_cidade WHERE cidade = $1 AND unidade = $2', [cidadeLimpa, unidade]);
+    } else {
+      await pool.query('DELETE FROM tabela_preco_cidade WHERE cidade = $1', [cidadeLimpa]);
+    }
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -177,7 +216,10 @@ router.delete('/precos-cidades/:cidade', requireRole('admin'), async (req, res) 
 router.get('/ctrcs-sem-preco', async (req, res) => {
   try {
     const { inicio, fim } = req.query;
-    const resultado = await getCidadesSemPreco(inicio || null, fim || null);
+    const isAdmin = req.user?.role === 'admin';
+    let unidade = req.query.unidade || null;
+    if (!isAdmin && req.user?.unidade) unidade = req.user.unidade;
+    const resultado = await getCidadesSemPreco(inicio || null, fim || null, unidade);
     res.json(resultado);
   } catch (err) {
     console.error('Erro ao buscar CTRCs sem preço:', err);
