@@ -46,6 +46,7 @@ export async function importarSsw036(rows) {
   const motoristaCache = new Map();
   const romaneioSet = new Set();
   const fretePorRomaneio = new Map();
+  const ajudanteNomeCache = new Map();
 
   for (const row of rows) {
     try {
@@ -74,13 +75,36 @@ export async function importarSsw036(rows) {
 
       const id = `${idRomaneio}|${ctrc}`;
 
-      const ajudCodigos = ['AJUDANTE', 'AJUDANTE_2', 'AJUDANTE_3'].map(col => (row[col] || '').trim().replace(/\D/g, ''));
-      for (const cod of ajudCodigos) {
-        if (!cod) continue;
-        await pool.query(
-          'INSERT INTO ajudantes (codigo) VALUES ($1) ON CONFLICT (codigo) DO NOTHING',
-          [cod]
+      const ajudNomes = ['AJUDANTE', 'AJUDANTE_2', 'AJUDANTE_3'].map(col => (row[col] || '').trim());
+      const ajudCodigos = [];
+      for (const nome of ajudNomes) {
+        if (!nome) { ajudCodigos.push(null); continue; }
+        const chave = nome.toUpperCase();
+        if (ajudanteNomeCache.has(chave)) {
+          ajudCodigos.push(ajudanteNomeCache.get(chave));
+          continue;
+        }
+        const { rows } = await pool.query(
+          'SELECT codigo FROM ajudantes WHERE UPPER(nome) = UPPER($1) LIMIT 1',
+          [nome]
         );
+        let codigo = null;
+        if (rows.length > 0) {
+          codigo = rows[0].codigo;
+        } else {
+          let hash = 0;
+          for (let i = 0; i < nome.length; i++) {
+            hash = ((hash << 5) - hash + nome.charCodeAt(i)) | 0;
+          }
+          codigo = String(Math.abs(hash));
+          await pool.query(
+            `INSERT INTO ajudantes (codigo, nome) VALUES ($1, $2)
+             ON CONFLICT (codigo) DO UPDATE SET nome = EXCLUDED.nome`,
+            [codigo, nome]
+          );
+        }
+        ajudanteNomeCache.set(chave, codigo);
+        ajudCodigos.push(codigo);
       }
 
       await pool.query(`

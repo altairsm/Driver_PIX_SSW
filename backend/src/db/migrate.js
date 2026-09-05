@@ -50,6 +50,7 @@ export async function runMigrations() {
 
     await pool.query(`DROP TABLE IF EXISTS ssw_romaneio_ajudantes`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_ajudantes_unidade ON ajudantes(unidade)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ajudantes_nome ON ajudantes(UPPER(nome))`);
     console.log('  -> ajudantes (vinculo via colunas em ssw_romaneios)');
 
     await pool.query(`CREATE TABLE IF NOT EXISTS ssw_romaneios (
