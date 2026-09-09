@@ -354,55 +354,75 @@ export default function AdminDashboard() {
                 </table>
               </div>
             )}
-            <div style={{ ...s.sectionTitle, marginTop: 32 }}>Uso do App por Ajudante</div>
-            <div className="usage-pie-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginTop: 16 }}>
-              <UsagePieSummary appUsage={appUsageAjudantes} loading={loading} title="Total CTRCs" showNote />
-              <UsagePieSummary appUsage={appUsageAjudantes.filter(r => r.tipo === 'agregado')} loading={loading} title="Agregados" />
-              <UsagePieSummary appUsage={appUsageAjudantes.filter(r => r.tipo === 'funcionario')} loading={loading} title="Funcionários" />
-            </div>
-            {appUsageAjudantes.length === 0 ? (
-              <div style={s.empty}>Nenhum registro encontrado para os filtros e ocorrências selecionados.</div>
-            ) : (
-              <div className="app-usage-table-wrap" style={s.tableWrap}>
-                <table style={s.table}>
-                  <thead>
-                    <tr>
-                      <th style={s.th}>Ajudante</th>
-                      <th style={s.th}>Código</th>
-                      <th style={s.th}>Tipo</th>
-                      <th style={s.th}>APP</th>
-                      <th style={s.th}>BASE</th>
-                      <th style={s.th}>SSW</th>
-                      <th style={s.th}>Total</th>
-                      <th style={{ ...s.th, minWidth: 200 }}>% APP</th>
-                    </tr>
-                  </thead>
-                  <tbody style={{ opacity: loading ? 0.55 : 1 }}>
-                    {appUsageAjudantes.map((a, i) => {
-                      const pct = Number(a.pct_app) || 0;
-                      return (
-                        <tr key={i}>
-                          <td style={s.td}>{a.nome}</td>
-                          <td style={s.td}>{a.codigo}</td>
-                          <td style={s.td}><span style={tipoBadgeStyle(a.tipo)}>{tipoLabel(a.tipo)}</span></td>
-                          <td style={{ ...s.td, color: '#3de8a0' }}>{a.app}</td>
-                          <td style={{ ...s.td, color: '#ff9f40' }}>{a.base}</td>
-                          <td style={{ ...s.td, color: '#6b7280' }}>{a.ssw}</td>
-                          <td style={s.td}>{a.total}</td>
-                          <td style={s.td}>
-                            <div style={s.barWrap}>
-                              <div style={{ ...s.barFill, width: `${pct}%`, background: '#3de8a0' }}></div>
-                              <div style={{ ...s.barFill, width: `${a.total > 0 ? ((a.base / a.total) * 100).toFixed(1) : 0}%`, background: '#ff9f40', position: 'absolute', left: `${pct}%` }}></div>
-                            </div>
-                            <span style={{ ...s.pctLabel, color: '#3de8a0' }}>{pct}%</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <div style={{ ...s.sectionTitle, marginTop: 32 }}>Ranking de Ajudantes por Posição</div>
+            {[
+              { posicao: 'PRINCIPAL', titulo: 'Ajudante Principal', cor: '#f0c040' },
+              { posicao: 'SEGUNDO', titulo: 'Ajudante 2', cor: '#3de8a0' },
+              { posicao: 'TERCEIRO', titulo: 'Ajudante 3', cor: '#9ca3af' },
+            ].map(({ posicao, titulo, cor }) => {
+              const dados = appUsageAjudantes.filter(r => r.posicao === posicao);
+              return (
+                <div key={posicao} style={{ marginTop: 20 }}>
+                  <div style={{ ...s.sectionTitle, color: cor }}>{titulo}</div>
+                  {dados.length === 0 ? (
+                    <div style={s.empty}>Nenhum registro encontrado para os filtros e ocorrências selecionados.</div>
+                  ) : (
+                    <div className="app-usage-table-wrap" style={s.tableWrap}>
+                      <table style={s.table}>
+                        <thead>
+                          <tr>
+                            <th style={s.th}>#</th>
+                            <th style={s.th}>Ajudante</th>
+                            <th style={s.th}>Código</th>
+                            <th style={s.th}>Tipo</th>
+                            <th style={s.th}>Total Ocorr.</th>
+                            <th style={s.th}>Entregas (01)</th>
+                            <th style={s.th}>Eficiência</th>
+                            <th style={s.th}>APP</th>
+                            <th style={s.th}>BASE</th>
+                            <th style={s.th}>SSW</th>
+                            <th style={{ ...s.th, minWidth: 200 }}>% APP</th>
+                          </tr>
+                        </thead>
+                        <tbody style={{ opacity: loading ? 0.55 : 1 }}>
+                          {dados.map((a, i) => {
+                            const pctApp = Number(a.pct_app) || 0;
+                            const pctEnt = Number(a.pct_entregas) || 0;
+                            const corEnt = pctEnt >= 95 ? '#3de8a0' : pctEnt >= 85 ? '#ff9f40' : '#ff5a5a';
+                            return (
+                              <tr key={i}>
+                                <td style={{ ...s.td, fontWeight: 700, color: cor }}>{i + 1}</td>
+                                <td style={s.td}>{a.nome}</td>
+                                <td style={s.td}>{a.codigo}</td>
+                                <td style={s.td}><span style={tipoBadgeStyle(a.tipo)}>{tipoLabel(a.tipo)}</span></td>
+                                <td style={s.td}>{a.total}</td>
+                                <td style={{ ...s.td, color: '#3de8a0' }}>{a.entregas}</td>
+                                <td style={s.td}>
+                                  <div style={s.barWrap}>
+                                    <div style={{ ...s.barFill, width: `${pctEnt}%`, background: corEnt }}></div>
+                                  </div>
+                                  <span style={{ ...s.pctLabel, color: corEnt }}>{pctEnt.toFixed(1)}%</span>
+                                </td>
+                                <td style={{ ...s.td, color: '#3de8a0' }}>{a.app}</td>
+                                <td style={{ ...s.td, color: '#ff9f40' }}>{a.base}</td>
+                                <td style={{ ...s.td, color: '#6b7280' }}>{a.ssw}</td>
+                                <td style={s.td}>
+                                  <div style={s.barWrap}>
+                                    <div style={{ ...s.barFill, width: `${pctApp}%`, background: '#3de8a0' }}></div>
+                                    <div style={{ ...s.barFill, width: `${a.total > 0 ? ((a.base / a.total) * 100).toFixed(1) : 0}%`, background: '#ff9f40', position: 'absolute', left: `${pctApp}%` }}></div>
+                                  </div>
+                                  <span style={{ ...s.pctLabel, color: '#3de8a0' }}>{pctApp}%</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 

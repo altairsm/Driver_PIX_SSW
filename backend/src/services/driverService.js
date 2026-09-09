@@ -468,16 +468,18 @@ export async function getAppUsageTodos(inicio, fim, tipo, unidade) {
 
 export async function getAppUsageAjudantes(inicio, fim, tipo, unidade) {
   const params = [];
-  const conditions = [];
+  const dataConditions = [];
+  const tipoConditions = [];
   if (inicio) { params.push(inicio); }
   if (fim) { params.push(fim); }
-  if (tipo) { params.push(tipo); conditions.push(`a.tipo = $${params.length}`); }
-  if (unidade) { params.push(unidade); conditions.push(`v.unidade_receptora = $${params.length}`); }
+  if (tipo) { params.push(tipo); tipoConditions.push(`a.tipo = $${params.length}`); }
+  if (unidade) { params.push(unidade); dataConditions.push(`v.unidade_receptora = $${params.length}`); }
 
   const occurrenceCodesParam = params.length + 1;
   params.push(APP_USAGE_OCCURRENCE_CODES);
   const occurrenceCodeFilter = APP_USAGE_CODE_FILTER(occurrenceCodesParam);
-  const whereTipo = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
+  const whereTipo = tipoConditions.length > 0 ? `AND ${tipoConditions.join(' AND ')}` : '';
+  const whereData = dataConditions.length > 0 ? `AND ${dataConditions.join(' AND ')}` : '';
   const dateFilter = (col) => {
     if (inicio && fim) return `${col} >= $1 AND ${col} <= $2`;
     if (inicio) return `${col} >= $1`;
@@ -485,24 +487,43 @@ export async function getAppUsageAjudantes(inicio, fim, tipo, unidade) {
     return `${col} >= (CURRENT_DATE - INTERVAL '30 days')::date`;
   };
 
-  const result = await pool.query(`
+  const branchSql = (posicao, colAjudante) => `
     SELECT
-      r.ajudante_codigo AS codigo,
-      a.nome,
-      a.tipo,
-      COUNT(*) FILTER (WHERE v.origem_ocorrencia = 'APP')::int AS app,
-      COUNT(*) FILTER (WHERE v.origem_ocorrencia = 'BASE')::int AS base,
-      COUNT(*) FILTER (WHERE v.origem_ocorrencia = 'SSW')::int AS ssw,
-      COUNT(*)::int AS total,
-      ROUND(COUNT(*) FILTER (WHERE v.origem_ocorrencia = 'APP') * 100.0 / NULLIF(COUNT(*), 0), 1)::numeric(5,1) AS pct_app
+      '${posicao}' AS posicao,
+      v.origem_ocorrencia AS origem,
+      v.codigo_ocorrencia AS codigo_ocorrencia,
+      ${colAjudante} AS codigo
     FROM ssw_455 v
     JOIN ssw_ctrcs c ON c.ctrc = v.ctrc_normalizado
     JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
-    JOIN ajudantes a ON a.codigo = r.ajudante_codigo
-    WHERE ${dateFilter('c.ocorrencia_data')} ${whereTipo}
+    WHERE ${dateFilter('c.ocorrencia_data')} ${whereData}
       AND ${occurrenceCodeFilter}
-    GROUP BY r.ajudante_codigo, a.nome, a.tipo
-    ORDER BY pct_app DESC
+  `;
+
+  const result = await pool.query(`
+    SELECT
+      sub.posicao,
+      a.codigo,
+      a.nome,
+      a.tipo,
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE sub.codigo_ocorrencia = '01')::int AS entregas,
+      ROUND(COUNT(*) FILTER (WHERE sub.codigo_ocorrencia = '01') * 100.0 / NULLIF(COUNT(*), 0), 1)::numeric(5,1) AS pct_entregas,
+      COUNT(*) FILTER (WHERE sub.origem = 'APP')::int AS app,
+      COUNT(*) FILTER (WHERE sub.origem = 'BASE')::int AS base,
+      COUNT(*) FILTER (WHERE sub.origem = 'SSW')::int AS ssw,
+      ROUND(COUNT(*) FILTER (WHERE sub.origem = 'APP') * 100.0 / NULLIF(COUNT(*), 0), 1)::numeric(5,1) AS pct_app
+    FROM (
+      ${branchSql('PRINCIPAL', 'r.ajudante_codigo')}
+      UNION ALL
+      ${branchSql('SEGUNDO', 'r.ajudante_2_codigo')}
+      UNION ALL
+      ${branchSql('TERCEIRO', 'r.ajudante_3_codigo')}
+    ) sub
+    JOIN ajudantes a ON a.codigo = sub.codigo
+    WHERE 1=1 ${whereTipo}
+    GROUP BY sub.posicao, a.codigo, a.nome, a.tipo
+    ORDER BY sub.posicao, total DESC
   `, params);
   return result.rows;
 }
