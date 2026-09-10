@@ -299,8 +299,8 @@ export async function importarSsw455(rows) {
 
       if (unidadeReceptora) {
         const result = await pool.query(`
-          UPDATE ssw_ctrcs SET unidade_receptora = $1
-          WHERE REPLACE(ctrc, ' ', '') = $2 AND $1 IS NOT NULL AND $1 <> ''
+          UPDATE ssw_ctrcs SET unidade_receptora = $1::text
+          WHERE REPLACE(ctrc, ' ', '') = $2::text AND $1::text IS NOT NULL AND $1::text <> ''
         `, [unidadeReceptora, ctrcNormalizado]);
         atualizados_ctrcs += result.rowCount;
       }
@@ -331,6 +331,7 @@ export async function importarSsw930(rows) {
       const dataOcor = parseBrDate(row['DATA_OCOR']);
       const horaOcor = (row['HORA_OCOR'] || '').trim();
       const codOcor = (row['COD_OCOR'] || '').trim().padStart(2, '0');
+      const descrOcor = (row['DESCRICAO_OCOR'] || '').trim();
       const complementoOcor = (row['COMPLEMENTO_OCOR'] || '').trim();
       const unidadeUltimaOcorrencia = normalizarUnidadeOcorrencia(row['UNID_OCOR']);
       const dataEntrega = parseBrDate(row['DATA_ENTREGA']);
@@ -346,10 +347,10 @@ export async function importarSsw930(rows) {
         const cmpData = dataOcor.localeCompare(existente.dataOcor);
         const cmpHora = horaOcor.localeCompare(existente.horaOcor);
         if (cmpData > 0 || (cmpData === 0 && cmpHora > 0)) {
-          ctrcsVistos.set(ctrcNormalizado, { dataOcor, horaOcor, codOcor, complementoOcor, unidadeUltimaOcorrencia, dataEntrega, cnpjPagador, nomePagador, ctrc });
+          ctrcsVistos.set(ctrcNormalizado, { dataOcor, horaOcor, codOcor, descrOcor, complementoOcor, unidadeUltimaOcorrencia, dataEntrega, cnpjPagador, nomePagador, ctrc });
         }
       } else {
-        ctrcsVistos.set(ctrcNormalizado, { dataOcor, horaOcor, codOcor, complementoOcor, unidadeUltimaOcorrencia, dataEntrega, cnpjPagador, nomePagador, ctrc });
+        ctrcsVistos.set(ctrcNormalizado, { dataOcor, horaOcor, codOcor, descrOcor, complementoOcor, unidadeUltimaOcorrencia, dataEntrega, cnpjPagador, nomePagador, ctrc });
       }
     } catch (err) {
       console.error('Erro ao processar linha SSW 930:', err.message);
@@ -365,10 +366,11 @@ export async function importarSsw930(rows) {
           data_ultima_ocorrencia = $1::date,
           codigo_ocorrencia = $2,
           unidade_ultima_ocorrencia = COALESCE($3, unidade_ultima_ocorrencia),
-          origem_ocorrencia = CASE WHEN $4::text IS NOT NULL THEN $5 ELSE origem_ocorrencia END
+          origem_ocorrencia = CASE WHEN $4::text IS NOT NULL THEN $5 ELSE origem_ocorrencia END,
+          ocorrencia = $7
         WHERE ctrc_normalizado = $6
           AND ($1::date >= data_ultima_ocorrencia OR data_ultima_ocorrencia IS NULL)
-      `, [info.dataOcor, info.codOcor, info.unidadeUltimaOcorrencia, info.complementoOcor || null, origem, ctrcNorm]);
+      `, [info.dataOcor, info.codOcor, info.unidadeUltimaOcorrencia, info.complementoOcor || null, origem, ctrcNorm, info.descrOcor]);
 
       if (rowCount > 0) {
         atualizados++;
