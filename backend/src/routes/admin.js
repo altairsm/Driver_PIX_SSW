@@ -540,17 +540,12 @@ router.get('/expedicao', async (req, res) => {
           v.setor_destino,
           to_char(v.data_emissao, 'YYYY-MM-DD') AS data_emissao,
           v.ocorrencia,
-          COALESCE(oc.resumo, oc_fb.resumo, 'Na filial') AS resumo,
-          COALESCE(oc.finalizadora, oc_fb.finalizadora, false) AS finalizadora,
+          COALESCE(oc.resumo, 'Na filial') AS resumo,
+          COALESCE(oc.finalizadora, false) AS finalizadora,
           p.ativo AS pagador_ativo
         FROM ssw_455 v
         JOIN pagadores p ON p.cnpj = v.cnpj_pagador
         LEFT JOIN ocorrencia_catalogo oc ON oc.codigo = v.codigo_ocorrencia
-        LEFT JOIN ocorrencia_catalogo oc_fb ON (
-          v.codigo_ocorrencia IS NULL
-          AND oc.id IS NULL
-          AND UPPER(v.ocorrencia) LIKE UPPER(oc_fb.descricao) || '%'
-        )
       ) q
       WHERE q.pagador_ativo = true
         AND (q.resumo IS NULL OR q.resumo != 'Em rota')
@@ -591,17 +586,12 @@ router.get('/expedicao-agrupada', async (req, res) => {
           v.peso_real,
           v.valor_mercadoria,
           v.unidade_receptora,
-          COALESCE(oc.resumo, oc_fb.resumo, 'Na filial') AS resumo,
-          COALESCE(oc.finalizadora, oc_fb.finalizadora, false) AS finalizadora,
+          COALESCE(oc.resumo, 'Na filial') AS resumo,
+          COALESCE(oc.finalizadora, false) AS finalizadora,
           p.ativo AS pagador_ativo
         FROM ssw_455 v
         JOIN pagadores p ON p.cnpj = v.cnpj_pagador
         LEFT JOIN ocorrencia_catalogo oc ON oc.codigo = v.codigo_ocorrencia
-        LEFT JOIN ocorrencia_catalogo oc_fb ON (
-          v.codigo_ocorrencia IS NULL
-          AND oc.id IS NULL
-          AND UPPER(v.ocorrencia) LIKE UPPER(oc_fb.descricao) || '%'
-        )
       ) q
       WHERE q.pagador_ativo = true
         AND (q.resumo IS NULL OR q.resumo != 'Em rota')
