@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getEficienciaMotoristas, getAppUsageMotoristas, getAppUsageAjudantes, getCtrcsParados, getCtrcsParadosDetalhado, getExpedicao, getExpedicaoAgrupada, getEscoamento } from '../services/api';
+import { getEficienciaMotoristas, getAppUsageMotoristas, getAppUsageAjudantes, getCtrcsParados, getCtrcsParadosDetalhado, getExpedicao, getExpedicaoAgrupada, getEscoamento, exportAppUsage } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import * as XLSX from 'xlsx';
 import Topbar, { UNIDADE_STORAGE_KEY } from '../components/Topbar';
@@ -131,6 +131,48 @@ export default function AdminDashboard() {
   });
 
   const [exportando, setExportando] = useState(false);
+  const [exportandoApp, setExportandoApp] = useState(false);
+
+  const handleExportarAppUsage = async () => {
+    setExportandoApp(true);
+    try {
+      const f = filtroRef.current;
+      const dados = await exportAppUsage(f.inicio || null, f.fim || null, f.tipo || null, f.unidade || null);
+      const fmtDate = (v) => {
+        if (!v) return '';
+        const d = new Date(`${v}T00:00:00`);
+        if (isNaN(d.getTime())) return '';
+        const dd = String(d.getUTCDate()).padStart(2, '0');
+        const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const yyyy = d.getUTCFullYear();
+        return `${dd}/${mm}/${yyyy}`;
+      };
+      const rows = dados.map(r => ({
+        'CTRC': r.ctrc || '',
+        'Motorista': r.motorista || '',
+        'CPF': r.cpf || '',
+        'Tipo': r.tipo || '',
+        'Cód. Ocorrência': r.codigo_ocorrencia || '',
+        'Origem': r.origem || '',
+        'Ocorrência': r.ocorrencia || '',
+        'Data Ocorrência': fmtDate(r.data_ocorrencia),
+        'Unidade': r.unidade || '',
+        'Cidade Entrega': r.cidade || '',
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = [
+        { wch: 18 }, { wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 14 },
+        { wch: 10 }, { wch: 80 }, { wch: 14 }, { wch: 12 }, { wch: 22 },
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Uso do App');
+      XLSX.writeFile(wb, `uso_app_${dataLocalISO(new Date())}.xlsx`);
+    } catch {
+      alert('Erro ao exportar dados');
+    } finally {
+      setExportandoApp(false);
+    }
+  };
 
   const handleExportarExcel = async () => {
     setExportando(true);
@@ -306,6 +348,16 @@ export default function AdminDashboard() {
         {activeTab === 'app' && (
           <div style={s.section} aria-busy={loading}>
             <div style={s.sectionTitle}>Uso do App por Motorista</div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+              <button
+                type="button"
+                style={{ ...s.exportBtn, background: '#198754', color: '#fff', opacity: exportandoApp ? 0.6 : 1 }}
+                onClick={handleExportarAppUsage}
+                disabled={exportandoApp || loading}
+              >
+                {exportandoApp ? 'Exportando...' : '📥 Exportar Excel'}
+              </button>
+            </div>
             <div className="usage-pie-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginTop: 16 }}>
               <UsagePieSummary appUsage={appUsage} loading={loading} title="Total CTRCs" showNote />
               <UsagePieSummary appUsage={appUsage.filter(r => r.tipo === 'agregado')} loading={loading} title="Agregados" />

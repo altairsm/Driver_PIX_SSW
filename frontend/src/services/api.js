@@ -317,6 +317,16 @@ export async function getAppUsageAjudantes(inicio, fim, tipo, unidade) {
   return data;
 }
 
+export async function exportAppUsage(inicio, fim, tipo, unidade) {
+  const params = {};
+  if (inicio) params.inicio = inicio;
+  if (fim) params.fim = fim;
+  if (tipo) params.tipo = tipo;
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/app-usage/export', { params, timeout: 300000 });
+  return data;
+}
+
 export async function getEscoamento(inicio, fim, unidade) {
   const params = {};
   if (inicio) params.inicio = inicio;

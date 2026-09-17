@@ -249,6 +249,57 @@ router.get('/app-usage-motoristas', async (req, res) => {
   }
 });
 
+router.get('/app-usage/export', async (req, res) => {
+  try {
+    const { inicio, fim, tipo, unidade } = req.query;
+    const params = [];
+    const conditions = [];
+
+    if (inicio) { params.push(inicio); }
+    if (fim) { params.push(fim); }
+    if (tipo) { params.push(tipo); conditions.push(`m.tipo = $${params.length}`); }
+    if (unidade) { params.push(unidade); conditions.push(`v.unidade_receptora = $${params.length}`); }
+
+    const occurrenceCodesParam = params.length + 1;
+    params.push(['01', '03', '10', '11', '13', '38', '60']);
+    const occurrenceCodeFilter = `LPAD(TRIM(COALESCE(v.codigo_ocorrencia, '')), 2, '0') = ANY($${occurrenceCodesParam}::text[])`;
+    const whereTipo = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
+
+    let dateFilter;
+    if (inicio && fim) dateFilter = `c.ocorrencia_data >= $1 AND c.ocorrencia_data <= $2`;
+    else if (inicio) dateFilter = `c.ocorrencia_data >= $1`;
+    else if (fim) dateFilter = `c.ocorrencia_data <= $1`;
+    else dateFilter = `c.ocorrencia_data >= (CURRENT_DATE - INTERVAL '30 days')::date`;
+
+    const { rows } = await pool.query(`
+      SELECT
+        v.ctrc AS ctrc,
+        v.codigo_ocorrencia,
+        v.origem_ocorrencia AS origem,
+        v.ocorrencia AS ocorrencia,
+        to_char(c.ocorrencia_data, 'YYYY-MM-DD') AS data_ocorrencia,
+        v.unidade_receptora AS unidade,
+        v.cidade_entrega AS cidade,
+        v.ctrc_normalizado,
+        r.motorista_cpf AS cpf,
+        r.motorista_nome AS motorista,
+        m.tipo AS tipo
+      FROM ssw_455 v
+      JOIN ssw_ctrcs c ON c.ctrc = v.ctrc_normalizado
+      JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
+      JOIN motoristas m ON m.cpf = r.motorista_cpf
+      WHERE ${dateFilter} ${whereTipo}
+        AND ${occurrenceCodeFilter}
+      ORDER BY r.motorista_nome, c.ocorrencia_data
+    `, params);
+
+    res.json(rows);
+  } catch (err) {
+    console.error('Erro ao exportar uso do app:', err);
+    res.status(500).json({ error: 'Erro ao exportar uso do app' });
+  }
+});
+
 router.get('/ajudantes', async (req, res) => {
   try {
     const { unidade } = req.query;
