@@ -513,31 +513,50 @@ router.get('/expedicao', async (req, res) => {
     const params = [];
     const conditions = [];
 
-    if (unidade) { params.push(unidade); conditions.push(`v.unidade_receptora = $${params.length}`); }
-    conditions.push('p.ativo = true');
-    conditions.push('(oc.id IS NULL OR oc.resumo IS NULL OR oc.resumo != \'Em rota\')');
-    conditions.push('(oc.id IS NULL OR oc.finalizadora != true)');
+    if (unidade) { params.push(unidade); conditions.push(`q.unidade_receptora = $${params.length}`); }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const { rows } = await pool.query(`
       SELECT
-        v.ctrc,
-        COALESCE(p.nome_simplificado, v.cliente_pagador) AS cliente_pagador,
-        v.cidade_entrega,
-        v.unidade_receptora,
-        v.cubagem_m3,
-        v.valor_mercadoria,
-        v.setor_destino,
-        to_char(v.data_emissao, 'YYYY-MM-DD') AS data_emissao,
-        v.ocorrencia,
-        COALESCE(oc.resumo, 'Na filial') AS resumo
-      FROM ssw_455 v
-      JOIN pagadores p ON p.cnpj = v.cnpj_pagador
-      LEFT JOIN ocorrencia_catalogo oc ON oc.codigo = v.codigo_ocorrencia
-        OR (v.codigo_ocorrencia IS NULL AND UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%')
-      ${where}
-      ORDER BY v.cliente_pagador, v.data_emissao
+        q.ctrc,
+        q.cliente_pagador,
+        q.cidade_entrega,
+        q.unidade_receptora,
+        q.cubagem_m3,
+        q.valor_mercadoria,
+        q.setor_destino,
+        q.data_emissao,
+        q.ocorrencia,
+        q.resumo
+      FROM (
+        SELECT
+          v.ctrc,
+          COALESCE(p.nome_simplificado, v.cliente_pagador) AS cliente_pagador,
+          v.cidade_entrega,
+          v.unidade_receptora,
+          v.cubagem_m3,
+          v.valor_mercadoria,
+          v.setor_destino,
+          to_char(v.data_emissao, 'YYYY-MM-DD') AS data_emissao,
+          v.ocorrencia,
+          COALESCE(oc.resumo, oc_fb.resumo, 'Na filial') AS resumo,
+          COALESCE(oc.finalizadora, oc_fb.finalizadora, false) AS finalizadora,
+          p.ativo AS pagador_ativo
+        FROM ssw_455 v
+        JOIN pagadores p ON p.cnpj = v.cnpj_pagador
+        LEFT JOIN ocorrencia_catalogo oc ON oc.codigo = v.codigo_ocorrencia
+        LEFT JOIN ocorrencia_catalogo oc_fb ON (
+          v.codigo_ocorrencia IS NULL
+          AND oc.id IS NULL
+          AND UPPER(v.ocorrencia) LIKE UPPER(oc_fb.descricao) || '%'
+        )
+      ) q
+      WHERE q.pagador_ativo = true
+        AND (q.resumo IS NULL OR q.resumo != 'Em rota')
+        AND (q.finalizadora IS NOT TRUE)
+        ${where}
+      ORDER BY q.cliente_pagador, q.data_emissao
     `, params);
 
     res.json(rows);
@@ -553,27 +572,42 @@ router.get('/expedicao-agrupada', async (req, res) => {
     const params = [];
     const conditions = [];
 
-    if (unidade) { params.push(unidade); conditions.push(`v.unidade_receptora = $${params.length}`); }
-    conditions.push('p.ativo = true');
-    conditions.push('(oc.id IS NULL OR oc.resumo IS NULL OR oc.resumo != \'Em rota\')');
-    conditions.push('(oc.id IS NULL OR oc.finalizadora != true)');
+    if (unidade) { params.push(unidade); conditions.push(`q.unidade_receptora = $${params.length}`); }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const { rows } = await pool.query(`
       SELECT
-        v.setor_destino,
+        q.setor_destino,
         COUNT(*)::int AS total_ctes,
-        COALESCE(SUM(v.cubagem_m3), 0)::numeric(10,3) AS total_cubagem,
-        COALESCE(SUM(v.peso_real), 0)::numeric(10,3) AS total_peso,
-        COALESCE(SUM(v.valor_mercadoria), 0)::numeric(12,2) AS total_valor_mercadoria,
-        CEIL(COALESCE(SUM(v.cubagem_m3), 0) / 20.0)::int AS carros_necessarios
-      FROM ssw_455 v
-      JOIN pagadores p ON p.cnpj = v.cnpj_pagador
-      LEFT JOIN ocorrencia_catalogo oc ON oc.codigo = v.codigo_ocorrencia
-        OR (v.codigo_ocorrencia IS NULL AND UPPER(v.ocorrencia) LIKE UPPER(oc.descricao) || '%')
-      ${where}
-      GROUP BY v.setor_destino
+        COALESCE(SUM(q.cubagem_m3), 0)::numeric(10,3) AS total_cubagem,
+        COALESCE(SUM(q.peso_real), 0)::numeric(10,3) AS total_peso,
+        COALESCE(SUM(q.valor_mercadoria), 0)::numeric(12,2) AS total_valor_mercadoria,
+        CEIL(COALESCE(SUM(q.cubagem_m3), 0) / 20.0)::int AS carros_necessarios
+      FROM (
+        SELECT
+          v.setor_destino,
+          v.cubagem_m3,
+          v.peso_real,
+          v.valor_mercadoria,
+          v.unidade_receptora,
+          COALESCE(oc.resumo, oc_fb.resumo, 'Na filial') AS resumo,
+          COALESCE(oc.finalizadora, oc_fb.finalizadora, false) AS finalizadora,
+          p.ativo AS pagador_ativo
+        FROM ssw_455 v
+        JOIN pagadores p ON p.cnpj = v.cnpj_pagador
+        LEFT JOIN ocorrencia_catalogo oc ON oc.codigo = v.codigo_ocorrencia
+        LEFT JOIN ocorrencia_catalogo oc_fb ON (
+          v.codigo_ocorrencia IS NULL
+          AND oc.id IS NULL
+          AND UPPER(v.ocorrencia) LIKE UPPER(oc_fb.descricao) || '%'
+        )
+      ) q
+      WHERE q.pagador_ativo = true
+        AND (q.resumo IS NULL OR q.resumo != 'Em rota')
+        AND (q.finalizadora IS NOT TRUE)
+        ${where}
+      GROUP BY q.setor_destino
       ORDER BY total_cubagem DESC
     `, params);
 
