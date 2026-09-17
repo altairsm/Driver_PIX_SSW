@@ -38,15 +38,20 @@ export function parseCSV(filePath, fromLine = 1) {
 }
 
 export async function importarSsw036(rows) {
-  let motoristas = 0;
-  let romaneios = 0;
-  let ctrcs = 0;
   let erros = 0;
 
-  const motoristaCache = new Map();
+  const motoristaCpfSet = new Set();
+  const motoristaPorCpf = new Map();
+  const ajudanteMap = new Map();
+  const novosAjudantes = [];
   const romaneioSet = new Set();
+  const romaneioPorId = new Map();
   const fretePorRomaneio = new Map();
-  const ajudanteNomeCache = new Map();
+  const ctrcRows = [];
+
+  const { rows: ajudantesExistentes } = await pool.query('SELECT codigo, nome FROM ajudantes');
+  const dbAjudanteMap = new Map();
+  for (const a of ajudantesExistentes) dbAjudanteMap.set(a.nome.toUpperCase(), a.codigo);
 
   for (const row of rows) {
     try {
@@ -63,59 +68,124 @@ export async function importarSsw036(rows) {
         continue;
       }
 
-      if (!motoristaCache.has(cpf)) {
-        await pool.query(`
-          INSERT INTO motoristas (cpf, nome)
-          VALUES ($1, $2)
-          ON CONFLICT (cpf) DO UPDATE SET nome = EXCLUDED.nome
-        `, [cpf, nomeMotorista]);
-        motoristaCache.set(cpf, true);
-        motoristas++;
+      if (!motoristaCpfSet.has(cpf)) {
+        motoristaCpfSet.add(cpf);
+        motoristaPorCpf.set(cpf, nomeMotorista);
       }
 
       const id = `${idRomaneio}|${ctrc}`;
 
-      const ajudNomes = ['AJUDANTE', 'AJUDANTE_2', 'AJUDANTE_3'].map(col => (row[col] || '').trim());
       const ajudCodigos = [];
-      for (const nome of ajudNomes) {
+      for (const col of ['AJUDANTE', 'AJUDANTE_2', 'AJUDANTE_3']) {
+        const nome = (row[col] || '').trim();
         if (!nome) { ajudCodigos.push(null); continue; }
         const chave = nome.toUpperCase();
-        if (ajudanteNomeCache.has(chave)) {
-          ajudCodigos.push(ajudanteNomeCache.get(chave));
-          continue;
-        }
-        const { rows } = await pool.query(
-          'SELECT codigo FROM ajudantes WHERE UPPER(nome) = UPPER($1) LIMIT 1',
-          [nome]
-        );
-        let codigo = null;
-        if (rows.length > 0) {
-          codigo = rows[0].codigo;
-        } else {
-          let hash = 0;
-          for (let i = 0; i < nome.length; i++) {
-            hash = ((hash << 5) - hash + nome.charCodeAt(i)) | 0;
+        let codigo = ajudanteMap.get(chave);
+        if (codigo === undefined) {
+          const existente = dbAjudanteMap.get(chave);
+          if (existente) {
+            codigo = existente;
+          } else {
+            let hash = 0;
+            for (let i = 0; i < nome.length; i++) {
+              hash = ((hash << 5) - hash + nome.charCodeAt(i)) | 0;
+            }
+            codigo = String(Math.abs(hash));
+            dbAjudanteMap.set(chave, codigo);
+            novosAjudantes.push([codigo, nome]);
           }
-          codigo = String(Math.abs(hash));
-          await pool.query(
-            `INSERT INTO ajudantes (codigo, nome) VALUES ($1, $2)
-             ON CONFLICT (codigo) DO UPDATE SET nome = EXCLUDED.nome`,
-            [codigo, nome]
-          );
+          ajudanteMap.set(chave, codigo);
         }
-        ajudanteNomeCache.set(chave, codigo);
         ajudCodigos.push(codigo);
       }
 
-      await pool.query(`
-        INSERT INTO ssw_romaneios (id_romaneio, motorista_cpf, motorista_nome, data_emissao, situacao, placa, ajudante_codigo, ajudante_2_codigo, ajudante_3_codigo)
-        VALUES ($1, $2, $3,
-          NULLIF($4, '')::date,
-          NULLIF($5, ''),
-          NULLIF($6, ''),
-          NULLIF($7, ''),
-          NULLIF($8, ''),
-          NULLIF($9, ''))
+      const freteStr = (row['FRETE CTRC'] || '0').replace(/\./g, '').replace(',', '.');
+      const freteVal = parseFloat(freteStr) || 0;
+      fretePorRomaneio.set(idRomaneio, (fretePorRomaneio.get(idRomaneio) || 0) + freteVal);
+
+      if (!romaneioSet.has(idRomaneio)) {
+        romaneioSet.add(idRomaneio);
+        romaneioPorId.set(idRomaneio, {
+          motorista_cpf: cpf,
+          motorista_nome: nomeMotorista,
+          data_emissao: parseBrDate(row['DATA EMISSAO']) || '',
+          situacao: row['SITUACAO'] || '',
+          placa: row['PLACA'] || '',
+          ajudante_codigo: ajudCodigos[0] || '',
+          ajudante_2_codigo: ajudCodigos[1] || '',
+          ajudante_3_codigo: ajudCodigos[2] || '',
+        });
+      } else {
+        const r = romaneioPorId.get(idRomaneio);
+        r.situacao = row['SITUACAO'] || '';
+        r.placa = row['PLACA'] || '';
+        r.ajudante_codigo = ajudCodigos[0] || '';
+        r.ajudante_2_codigo = ajudCodigos[1] || '';
+        r.ajudante_3_codigo = ajudCodigos[2] || '';
+      }
+
+      const pesoSStr = (row['PESO CALCULO'] || '0').replace(/\./g, '').replace(',', '.');
+      const qtdeStr = (row['QTDE VOL'] || '0').replace(/\D/g, '') || '0';
+
+      ctrcRows.push([
+        id,
+        ctrc,
+        idRomaneio,
+        (row['CIDADE_ENTREGA'] || '').trim(),
+        (row['CEP ENTREGA'] || '').replace(/\D/g, ''),
+        (row['BAIRRO'] || '').trim(),
+        (row['LOCAL DE ENTREGA'] || '').trim(),
+        String(parseFloat(pesoSStr) || 0),
+        String(parseFloat(freteStr) || 0),
+        String(parseInt(qtdeStr) || 0),
+        parseBrDate(row['DATA EMISSAO']) || '',
+        ocorrencia,
+        ocorrenciaData || '',
+        ocorrenciaHora || '',
+        idRomaneio.slice(0, 3).toUpperCase() || '',
+      ]);
+    } catch (err) {
+      console.error('Erro ao processar linha SSW 036:', err.message, JSON.stringify(row).slice(0, 200));
+      erros++;
+    }
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (motoristaCpfSet.size > 0) {
+      const cpfs = [...motoristaCpfSet];
+      await client.query(`
+        INSERT INTO motoristas (cpf, nome)
+        SELECT v.c1, v.c2
+        FROM unnest($1::text[], $2::text[]) AS v(c1, c2)
+        WHERE NULLIF(v.c1, '') IS NOT NULL
+        ON CONFLICT (cpf) DO UPDATE SET nome = EXCLUDED.nome
+      `, [cpfs, cpfs.map(c => motoristaPorCpf.get(c) || '')]);
+    }
+
+    if (novosAjudantes.length > 0) {
+      await client.query(`
+        INSERT INTO ajudantes (codigo, nome)
+        SELECT v.c1, v.c2
+        FROM unnest($1::text[], $2::text[]) AS v(c1, c2)
+        WHERE NULLIF(v.c1, '') IS NOT NULL
+        ON CONFLICT (codigo) DO UPDATE SET nome = EXCLUDED.nome
+      `, [novosAjudantes.map(a => a[0]), novosAjudantes.map(a => a[1])]);
+    }
+
+    if (romaneioPorId.size > 0) {
+      const rs = [...romaneioPorId.entries()];
+      await client.query(`
+        INSERT INTO ssw_romaneios (
+          id_romaneio, motorista_cpf, motorista_nome, data_emissao, situacao, placa,
+          ajudante_codigo, ajudante_2_codigo, ajudante_3_codigo
+        )
+        SELECT v.c1, v.c2, v.c3, NULLIF(v.c4, '')::date, NULLIF(v.c5, ''), NULLIF(v.c6, ''),
+               NULLIF(v.c7, ''), NULLIF(v.c8, ''), NULLIF(v.c9, '')
+        FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[],
+                    $7::text[], $8::text[], $9::text[]) AS v(c1, c2, c3, c4, c5, c6, c7, c8, c9)
         ON CONFLICT (id_romaneio) DO UPDATE SET
           situacao = EXCLUDED.situacao,
           placa = EXCLUDED.placa,
@@ -123,39 +193,34 @@ export async function importarSsw036(rows) {
           ajudante_2_codigo = EXCLUDED.ajudante_2_codigo,
           ajudante_3_codigo = EXCLUDED.ajudante_3_codigo
       `, [
-        idRomaneio, cpf, nomeMotorista,
-        parseBrDate(row['DATA EMISSAO']),
-        row['SITUACAO'] || null,
-        row['PLACA'] || null,
-        ajudCodigos[0] || null,
-        ajudCodigos[1] || null,
-        ajudCodigos[2] || null,
+        rs.map(r => r[0]),
+        rs.map(r => r[1].motorista_cpf),
+        rs.map(r => r[1].motorista_nome),
+        rs.map(r => r[1].data_emissao),
+        rs.map(r => r[1].situacao),
+        rs.map(r => r[1].placa),
+        rs.map(r => r[1].ajudante_codigo),
+        rs.map(r => r[1].ajudante_2_codigo),
+        rs.map(r => r[1].ajudante_3_codigo),
       ]);
+    }
 
-      if (!romaneioSet.has(idRomaneio)) {
-        romaneioSet.add(idRomaneio);
-        romaneios++;
-      }
-
-      const freteStr = (row['FRETE CTRC'] || '0').replace(/\./g, '').replace(',', '.');
-      const freteVal = parseFloat(freteStr) || 0;
-      fretePorRomaneio.set(idRomaneio, (fretePorRomaneio.get(idRomaneio) || 0) + freteVal);
-
-      const pesoSStr = (row['PESO CALCULO'] || '0').replace(/\./g, '').replace(',', '.');
-      const qtdeStr = (row['QTDE VOL'] || '0').replace(/\D/g, '') || '0';
-
-      const cep = (row['CEP ENTREGA'] || '').replace(/\D/g, '');
-      const unidade = idRomaneio.slice(0, 3).toUpperCase();
-
-      await pool.query(`
+    if (ctrcRows.length > 0) {
+      await client.query(`
         INSERT INTO ssw_ctrcs (
           id, ctrc, id_romaneio, cidade_entrega, cep, bairro, local_entrega,
           peso_calculo, frete_ctrc, qtde_vol, data_emissao,
           ocorrencia, ocorrencia_data, ocorrencia_hora, unidade_receptora
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-          NULLIF($11, '')::date, $12,
-          NULLIF($13, '')::date,
-          NULLIF($14, ''), $15)
+        )
+        SELECT v.c1, v.c2, v.c3, NULLIF(v.c4, ''), NULLIF(v.c5, ''), NULLIF(v.c6, ''), NULLIF(v.c7, ''),
+               COALESCE(NULLIF(v.c8, '')::numeric, 0),
+               COALESCE(NULLIF(v.c9, '')::numeric, 0),
+               COALESCE(NULLIF(v.c10, '')::int, 0),
+               NULLIF(v.c11, '')::date,
+               NULLIF(v.c12, ''), NULLIF(v.c13, '')::date, NULLIF(v.c14, ''), NULLIF(v.c15, '')
+        FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[],
+                    $8::text[], $9::text[], $10::text[], $11::text[], $12::text[], $13::text[], $14::text[], $15::text[])
+              AS v(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15)
         ON CONFLICT (id) DO UPDATE SET
           cidade_entrega = COALESCE(EXCLUDED.cidade_entrega, ssw_ctrcs.cidade_entrega),
           cep = COALESCE(EXCLUDED.cep, ssw_ctrcs.cep),
@@ -164,36 +229,32 @@ export async function importarSsw036(rows) {
           ocorrencia = EXCLUDED.ocorrencia,
           ocorrencia_data = EXCLUDED.ocorrencia_data,
           ocorrencia_hora = EXCLUDED.ocorrencia_hora
-      `, [
-        id, ctrc, idRomaneio,
-        (row['CIDADE_ENTREGA'] || '').trim(),
-        cep,
-        (row['BAIRRO'] || '').trim(),
-        (row['LOCAL DE ENTREGA'] || '').trim(),
-        parseFloat(pesoSStr) || 0,
-        parseFloat(freteStr) || 0,
-        parseInt(qtdeStr) || 0,
-        parseBrDate(row['DATA EMISSAO']),
-        ocorrencia,
-        ocorrenciaData,
-        ocorrenciaHora,
-        unidade || null,
-      ]);
-      ctrcs++;
-    } catch (err) {
-      console.error('Erro ao processar linha SSW 036:', err.message, JSON.stringify(row).slice(0, 200));
-      erros++;
+      `, ctrcRows[0].map((_, i) => ctrcRows.map(r => r[i])));
     }
+
+    if (fretePorRomaneio.size > 0) {
+      await client.query(`
+        UPDATE ssw_romaneios r
+        SET total_frete = NULLIF(s.c2, '')::numeric
+        FROM unnest($1::text[], $2::text[]) AS s(c1, c2)
+        WHERE r.id_romaneio = s.c1
+      `, [[...fretePorRomaneio.keys()], [...fretePorRomaneio.values()].map(v => String(v))]);
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
   }
 
-  for (const [romId, total] of fretePorRomaneio) {
-    await pool.query(
-      'UPDATE ssw_romaneios SET total_frete = $1 WHERE id_romaneio = $2',
-      [total, romId]
-    );
-  }
-
-  return { motoristas, romaneios, ctrcs, erros };
+  return {
+    motoristas: motoristaCpfSet.size,
+    romaneios: romaneioSet.size,
+    ctrcs: ctrcRows.length,
+    erros,
+  };
 }
 
 function classificarOrigem(texto) {
@@ -204,11 +265,12 @@ function classificarOrigem(texto) {
 }
 
 export async function importarSsw455(rows) {
-  let importados = 0;
   let erros = 0;
   let atualizados_ctrcs = 0;
   let pagadores_cadastrados = 0;
-  const cnpjsVistos = new Set();
+  const ssw455Rows = [];
+  const pagadoresMap = new Map();
+  const ctrcUnidadeUpdates = [];
 
   for (const row of rows) {
     try {
@@ -218,8 +280,8 @@ export async function importarSsw455(rows) {
       const ctrcNormalizado = ctrc.replace(/\s+/g, '');
       const controleDuplicidade = `455|${ctrcNormalizado}`;
 
-      const dataEmissao = parseBrDate(row['Data de Emissao']);
-      const dataBaixa = parseBrDate(row['Data da Liquidacao']);
+      const dataEmissao = parseBrDate(row['Data de Emissao']) || '';
+      const dataBaixa = parseBrDate(row['Data da Liquidacao']) || '';
 
       const cnpjPagador = (row['CNPJ Pagador'] || '').replace(/\D/g, '');
       const clientePagador = (row['Cliente Pagador'] || '').trim();
@@ -235,16 +297,45 @@ export async function importarSsw455(rows) {
       const codigoOcorrencia = (row['Codigo da Ultima Ocorrencia'] || '').trim().padStart(2, '0');
       const serieNumeroCte = (row['Serie/Numero CT-e'] || '').trim();
       const numeroNotaFiscal = (row['Numero da Nota Fiscal'] || '').trim();
-      const previsaoEntrega = parseBrDate(row['Previsao de Entrega']);
-      const dataUltimaOcorrencia = parseBrDate(row['Data da Ultima Ocorrencia']);
-      const unidadeUltimaOcorrencia = normalizarUnidadeOcorrencia(row['Unidade da Ultima Ocorrencia']);
+      const previsaoEntrega = parseBrDate(row['Previsao de Entrega']) || '';
+      const dataUltimaOcorrencia = parseBrDate(row['Data da Ultima Ocorrencia']) || '';
+      const unidadeUltimaOcorrencia = normalizarUnidadeOcorrencia(row['Unidade da Ultima Ocorrencia']) || '';
       const cubagemM3 = parseFloat((row['Cubagem em m3'] || '0').replace(/\./g, '').replace(',', '.')) || 0;
       const tipoBaixa = (row['Tipo de Baixa'] || '').trim();
       const valorMercadoria = parseFloat((row['Valor da Mercadoria'] || '0').replace(/\./g, '').replace(',', '.')) || 0;
       const setorDestino = (row['Setor de Destino'] || '').trim();
       const origemOcorrencia = classificarOrigem(ocorrencia);
 
-      await pool.query(`
+      ssw455Rows.push([
+        ctrc, ctrcNormalizado, serieNumeroCte, dataEmissao,
+        cnpjPagador, clientePagador, unidadeReceptora,
+        cidadeEntrega, ufEntrega, cepEntrega,
+        String(pesoReal), String(volumes), String(valorFrete), tipoFrete,
+        dataBaixa, ocorrencia, controleDuplicidade,
+        numeroNotaFiscal, previsaoEntrega, dataUltimaOcorrencia,
+        unidadeUltimaOcorrencia, String(cubagemM3), tipoBaixa, String(valorMercadoria), setorDestino,
+        codigoOcorrencia, origemOcorrencia,
+      ]);
+
+      if (cnpjPagador && !pagadoresMap.has(cnpjPagador)) {
+        pagadoresMap.set(cnpjPagador, [cnpjPagador, clientePagador, clientePagador]);
+      }
+
+      if (unidadeReceptora) {
+        ctrcUnidadeUpdates.push([unidadeReceptora, ctrcNormalizado]);
+      }
+    } catch (err) {
+      console.error('Erro ao processar linha SSW 455:', err.message, JSON.stringify(row).slice(0, 200));
+      erros++;
+    }
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (ssw455Rows.length > 0) {
+      await client.query(`
         INSERT INTO ssw_455 (
           ctrc, ctrc_normalizado, serie_numero_cte, data_emissao,
           cnpj_pagador, cliente_pagador, unidade_receptora,
@@ -254,7 +345,24 @@ export async function importarSsw455(rows) {
           numero_nota_fiscal, previsao_entrega, data_ultima_ocorrencia,
           unidade_ultima_ocorrencia, cubagem_m3, tipo_baixa, valor_mercadoria, setor_destino,
           codigo_ocorrencia, origem_ocorrencia
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+        )
+        SELECT v.c1, v.c2, NULLIF(v.c3, ''), NULLIF(v.c4, '')::date,
+               NULLIF(v.c5, ''), NULLIF(v.c6, ''), NULLIF(v.c7, ''),
+               NULLIF(v.c8, ''), NULLIF(v.c9, ''), NULLIF(v.c10, ''),
+               COALESCE(NULLIF(v.c11, '')::numeric, 0), COALESCE(NULLIF(v.c12, '')::int, 0),
+               COALESCE(NULLIF(v.c13, '')::numeric, 0), NULLIF(v.c14, ''),
+               NULLIF(v.c15, '')::date, NULLIF(v.c16, ''), v.c17,
+               NULLIF(v.c18, ''), NULLIF(v.c19, '')::date, NULLIF(v.c20, '')::date,
+               NULLIF(v.c21, ''), COALESCE(NULLIF(v.c22, '')::numeric, 0), NULLIF(v.c23, ''),
+               COALESCE(NULLIF(v.c24, '')::numeric, 0), NULLIF(v.c25, ''),
+               NULLIF(v.c26, ''), NULLIF(v.c27, '')
+        FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[],
+                    $7::text[], $8::text[], $9::text[], $10::text[], $11::text[], $12::text[],
+                    $13::text[], $14::text[], $15::text[], $16::text[], $17::text[], $18::text[],
+                    $19::text[], $20::text[], $21::text[], $22::text[], $23::text[], $24::text[],
+                    $25::text[], $26::text[], $27::text[])
+              AS v(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17,
+                   c18, c19, c20, c21, c22, c23, c24, c25, c26, c27)
         ON CONFLICT ("controle_duplicidade") DO UPDATE SET
           unidade_receptora = EXCLUDED.unidade_receptora,
           ocorrencia = CASE WHEN EXCLUDED.data_ultima_ocorrencia >= ssw_455.data_ultima_ocorrencia OR ssw_455.data_ultima_ocorrencia IS NULL THEN EXCLUDED.ocorrencia ELSE ssw_455.ocorrencia END,
@@ -274,45 +382,48 @@ export async function importarSsw455(rows) {
           setor_destino = EXCLUDED.setor_destino,
           codigo_ocorrencia = CASE WHEN EXCLUDED.data_ultima_ocorrencia >= ssw_455.data_ultima_ocorrencia OR ssw_455.data_ultima_ocorrencia IS NULL THEN EXCLUDED.codigo_ocorrencia ELSE ssw_455.codigo_ocorrencia END,
           origem_ocorrencia = CASE WHEN EXCLUDED.data_ultima_ocorrencia >= ssw_455.data_ultima_ocorrencia OR ssw_455.data_ultima_ocorrencia IS NULL THEN EXCLUDED.origem_ocorrencia ELSE ssw_455.origem_ocorrencia END
-      `, [
-        ctrc, ctrcNormalizado, serieNumeroCte, dataEmissao,
-        cnpjPagador, clientePagador, unidadeReceptora,
-        cidadeEntrega, ufEntrega, cepEntrega,
-        pesoReal, volumes, valorFrete, tipoFrete,
-        dataBaixa, ocorrencia, controleDuplicidade,
-        numeroNotaFiscal, previsaoEntrega, dataUltimaOcorrencia,
-        unidadeUltimaOcorrencia, cubagemM3, tipoBaixa, valorMercadoria, setorDestino,
-        codigoOcorrencia, origemOcorrencia,
-      ]);
-
-      if (cnpjPagador && !cnpjsVistos.has(cnpjPagador)) {
-        cnpjsVistos.add(cnpjPagador);
-        const { rowCount } = await pool.query(`
-          INSERT INTO pagadores (cnpj, razao_social, nome_simplificado)
-          VALUES ($1, $2, $3)
-          ON CONFLICT (cnpj) DO UPDATE SET
-            razao_social = EXCLUDED.razao_social
-          WHERE pagadores.razao_social IS NULL OR pagadores.razao_social = ''
-        `, [cnpjPagador, clientePagador, clientePagador]);
-        if (rowCount > 0) pagadores_cadastrados++;
-      }
-
-      if (unidadeReceptora) {
-        const result = await pool.query(`
-          UPDATE ssw_ctrcs SET unidade_receptora = $1::text
-          WHERE REPLACE(ctrc, ' ', '') = $2::text AND $1::text IS NOT NULL AND $1::text <> ''
-        `, [unidadeReceptora, ctrcNormalizado]);
-        atualizados_ctrcs += result.rowCount;
-      }
-
-      importados++;
-    } catch (err) {
-      console.error('Erro ao processar linha SSW 455:', err.message, JSON.stringify(row).slice(0, 200));
-      erros++;
+      `, ssw455Rows[0].map((_, i) => ssw455Rows.map(r => r[i])));
     }
+
+    if (pagadoresMap.size > 0) {
+      const pagadores = [...pagadoresMap.values()];
+      const { rowCount } = await client.query(`
+        INSERT INTO pagadores (cnpj, razao_social, nome_simplificado)
+        SELECT v.c1, v.c2, v.c3
+        FROM unnest($1::text[], $2::text[], $3::text[]) AS v(c1, c2, c3)
+        WHERE NULLIF(v.c1, '') IS NOT NULL
+        ON CONFLICT (cnpj) DO UPDATE SET
+          razao_social = EXCLUDED.razao_social
+          WHERE pagadores.razao_social IS NULL OR pagadores.razao_social = ''
+      `, [
+        pagadores.map(p => p[0]),
+        pagadores.map(p => p[1]),
+        pagadores.map(p => p[2]),
+      ]);
+      if (rowCount > 0) pagadores_cadastrados = rowCount;
+    }
+
+    if (ctrcUnidadeUpdates.length > 0) {
+      const { rowCount } = await client.query(`
+        UPDATE ssw_ctrcs SET unidade_receptora = s.c1
+        FROM unnest($1::text[], $2::text[]) AS s(c1, c2)
+        WHERE REPLACE(ctrc, ' ', '') = s.c2 AND NULLIF(s.c1, '') IS NOT NULL
+      `, [
+        ctrcUnidadeUpdates.map(u => u[0]),
+        ctrcUnidadeUpdates.map(u => u[1]),
+      ]);
+      if (rowCount > 0) atualizados_ctrcs = rowCount;
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
   }
 
-  return { importados, erros, atualizados_ctrcs, pagadores_cadastrados };
+  return { importados: ssw455Rows.length, erros, atualizados_ctrcs, pagadores_cadastrados };
 }
 
 export async function importarSsw930(rows) {
