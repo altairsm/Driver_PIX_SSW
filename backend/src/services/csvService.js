@@ -481,7 +481,7 @@ export async function importarSsw930(rows) {
           ocorrencia = $7
         WHERE ctrc_normalizado = $6
           AND ($1::date >= data_ultima_ocorrencia OR data_ultima_ocorrencia IS NULL)
-      `, [info.dataOcor, info.codOcor, info.unidadeUltimaOcorrencia, info.complementoOcor || null, origem, ctrcNorm, info.descrOcor]);
+      `, [info.dataOcor, info.codOcor, info.unidadeUltimaOcorrencia, info.complementoOcor || null, origem, ctrcNorm, info.complementoOcor || info.descrOcor]);
 
       if (rowCount > 0) {
         atualizados++;

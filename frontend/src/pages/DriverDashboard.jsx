@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDriverDashboard, getDriverRomaneios, getDriverRomaneioDetalhes, getDriverMe, getQuinzenas, getProdutividade, getEficiencia, solicitarPagamento, getConfig, getTaxasAdiantamento, getBonusD0, getAppUsage } from '../services/api';
-import { sendFcmTokenWithRetry } from '../services/notificationService';
 
 function formatDate(d) {
   if (!d) return '—';
@@ -93,7 +92,6 @@ export default function DriverDashboard() {
         setQuinzenas(qzs);
         setConfig(cfg);
         setTaxas(tx);
-        sendFcmTokenWithRetry(5, 2000);
         if (qzs.length > 0) {
           const q = qzs[0];
           await fetchQuinzenaData(q.inicio, q.fim);

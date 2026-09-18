@@ -528,6 +528,76 @@ export async function getAppUsageAjudantes(inicio, fim, tipo, unidade) {
   return result.rows;
 }
 
+export async function getAppUsageAjudantesDetalhado(inicio, fim, tipo, unidade) {
+  const params = [];
+  const dataConditions = [];
+  const tipoConditions = [];
+  if (inicio) { params.push(inicio); }
+  if (fim) { params.push(fim); }
+  if (tipo) { params.push(tipo); tipoConditions.push(`a.tipo = $${params.length}`); }
+  if (unidade) { params.push(unidade); dataConditions.push(`v.unidade_receptora = $${params.length}`); }
+
+  const occurrenceCodesParam = params.length + 1;
+  params.push(APP_USAGE_OCCURRENCE_CODES);
+  const occurrenceCodeFilter = APP_USAGE_CODE_FILTER(occurrenceCodesParam);
+  const whereTipo = tipoConditions.length > 0 ? `AND ${tipoConditions.join(' AND ')}` : '';
+  const whereData = dataConditions.length > 0 ? `AND ${dataConditions.join(' AND ')}` : '';
+  const dateFilter = (col) => {
+    if (inicio && fim) return `${col} >= $1 AND ${col} <= $2`;
+    if (inicio) return `${col} >= $1`;
+    if (fim) return `${col} <= $1`;
+    return `${col} >= (CURRENT_DATE - INTERVAL '30 days')::date`;
+  };
+
+  const branchSql = (posicao, colAjudante) => `
+    SELECT
+      '${posicao}' AS posicao,
+      v.origem_ocorrencia AS origem,
+      v.codigo_ocorrencia AS codigo_ocorrencia,
+      v.ocorrencia AS ocorrencia,
+      v.ctrc_normalizado AS ctrc_normalizado,
+      v.unidade_receptora AS unidade,
+      v.cidade_entrega AS cidade,
+      c.ocorrencia_data AS ocorrencia_data,
+      ${colAjudante} AS codigo
+    FROM ssw_455 v
+    JOIN ssw_ctrcs c ON c.ctrc = v.ctrc_normalizado
+    JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
+    WHERE ${dateFilter('c.ocorrencia_data')} ${whereData}
+      AND ${occurrenceCodeFilter}
+  `;
+
+  const result = await pool.query(`
+    SELECT
+      sub.posicao,
+      a.codigo AS codigo_ajudante,
+      a.nome AS nome,
+      a.tipo AS tipo,
+      sub.origem,
+      sub.codigo_ocorrencia AS codigo_ocorrencia,
+      sub.ocorrencia,
+      sub.ocorrencia_data AS data_ocorrencia,
+      sub.ctrc_normalizado AS ctrc,
+      r.motorista_cpf AS cpf,
+      r.motorista_nome AS motorista,
+      sub.unidade,
+      sub.cidade
+    FROM (
+      ${branchSql('PRINCIPAL', 'r.ajudante_codigo')}
+      UNION ALL
+      ${branchSql('SEGUNDO', 'r.ajudante_2_codigo')}
+      UNION ALL
+      ${branchSql('TERCEIRO', 'r.ajudante_3_codigo')}
+    ) sub
+    JOIN ajudantes a ON a.codigo = sub.codigo
+    JOIN ssw_ctrcs c2 ON c2.ctrc = sub.ctrc_normalizado
+    JOIN ssw_romaneios r ON r.id_romaneio = c2.id_romaneio
+    WHERE 1=1 ${whereTipo}
+    ORDER BY sub.posicao, a.nome, sub.ctrc_normalizado
+  `, params);
+  return result.rows;
+}
+
 export async function getEscoamento(inicio, fim, unidade) {
   const params = [];
   const conditions = [];

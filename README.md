@@ -1,6 +1,6 @@
 # Driver_Pey
 
-Sistema web para gestão de pagamentos a motoristas baseado em relatórios de entrega da JadLog.
+Sistema web para gestão de pagamentos a motoristas e controle de entregas (romaneios, CTRCs e uso do aplicativo).
 
 ## Stack
 
@@ -41,7 +41,7 @@ Edite `backend/.env` com as credenciais do PostgreSQL:
 PORT=3001
 DB_HOST=163.176.242.98
 DB_PORT=5432
-DB_NAME=jadlog
+DB_NAME=driverfds
 DB_USER=postgres
 DB_PASS=PUhgB0AZWAfhfm9qFe0sDcLzQG09hTGLkSC3eOa66e333b7b
 JWT_SECRET=0e560c48d422acdbf0b106df4dc154c5
@@ -76,7 +76,7 @@ O frontend inicia em `http://localhost:5173`.
 | GET | `/api/driver/dashboard` | Resumo de produtividade |
 | GET | `/api/driver/trips` | Viagens do motorista |
 | GET | `/api/driver/me` | Dados do motorista logado |
-| POST | `/api/upload` | Upload XLSX JadLog |
+| POST | `/api/upload` | Upload XLSX |
 | POST | `/api/upload/preview` | Preview do XLSX |
 | GET | `/api/admin/pagamentos?inicio=&fim=` | Pagamentos por período |
 | GET | `/api/admin/resumo?inicio=&fim=` | Resumo consolidado |

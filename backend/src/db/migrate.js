@@ -239,12 +239,7 @@ export async function runMigrations() {
       console.log('  admin_users migration skipped:', err.message);
     }
 
-    await pool.query(`CREATE TABLE IF NOT EXISTS fcm_tokens (
-      cpf VARCHAR(11) PRIMARY KEY,
-      token TEXT NOT NULL,
-      atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`);
-    console.log('  -> fcm_tokens');
+    await pool.query(`DROP TABLE IF EXISTS fcm_tokens`);
 
     await pool.query(`CREATE TABLE IF NOT EXISTS ssw_ocorrencias (
       id SERIAL PRIMARY KEY,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getEficienciaMotoristas, getAppUsageMotoristas, getAppUsageAjudantes, getCtrcsParados, getCtrcsParadosDetalhado, getExpedicao, getExpedicaoAgrupada, getEscoamento, exportAppUsage } from '../services/api';
+import { getEficienciaMotoristas, getAppUsageMotoristas, getAppUsageAjudantes, getCtrcsParados, getCtrcsParadosDetalhado, getExpedicao, getExpedicaoAgrupada, getEscoamento, exportAppUsage, exportAppUsageAjudantes } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import * as XLSX from 'xlsx';
 import Topbar, { UNIDADE_STORAGE_KEY } from '../components/Topbar';
@@ -133,37 +133,65 @@ export default function AdminDashboard() {
   const [exportando, setExportando] = useState(false);
   const [exportandoApp, setExportandoApp] = useState(false);
 
-  const handleExportarAppUsage = async () => {
-    setExportandoApp(true);
+  const [exportandoAjudantes, setExportandoAjudantes] = useState(false);
+
+  const handleExportarAppUsageAjudantes = async () => {
+    setExportandoAjudantes(true);
     try {
       const f = filtroRef.current;
-      const dados = await exportAppUsage(f.inicio || null, f.fim || null, f.tipo || null, f.unidade || null);
+      const data = await exportAppUsageAjudantes(f.inicio || null, f.fim || null, f.tipo || null, f.unidade || null);
       const fmtDate = (v) => {
         if (!v) return '';
-        const d = new Date(`${v}T00:00:00`);
-        if (isNaN(d.getTime())) return '';
+        const d = new Date(v);
+        if (Number.isNaN(d.getTime())) return '';
         const dd = String(d.getUTCDate()).padStart(2, '0');
         const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
         const yyyy = d.getUTCFullYear();
         return `${dd}/${mm}/${yyyy}`;
       };
-      const rows = dados.map(r => ({
-        'CTRC': r.ctrc || '',
-        'Motorista': r.motorista || '',
-        'CPF': r.cpf || '',
+      const rows = data.map((r) => ({
+        'Posição': r.posicao || '',
+        'Cód. Ajudante': r.codigo || '',
+        'Nome': r.nome || '',
         'Tipo': r.tipo || '',
-        'Cód. Ocorrência': r.codigo_ocorrencia || '',
         'Origem': r.origem || '',
+        'Cód. Ocorrência': r.codigo_ocorrencia || '',
         'Ocorrência': r.ocorrencia || '',
         'Data Ocorrência': fmtDate(r.data_ocorrencia),
+        'CTRC': r.ctrc_normalizado || '',
+        'CPF': r.cpf || '',
+        'Motorista': r.motorista || '',
         'Unidade': r.unidade || '',
-        'Cidade Entrega': r.cidade || '',
+        'Cidade': r.cidade || '',
       }));
       const ws = XLSX.utils.json_to_sheet(rows);
       ws['!cols'] = [
-        { wch: 18 }, { wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 14 },
-        { wch: 10 }, { wch: 80 }, { wch: 14 }, { wch: 12 }, { wch: 22 },
+        { wch: 10 }, { wch: 12 }, { wch: 20 }, { wch: 8 }, { wch: 22 },
+        { wch: 14 }, { wch: 26 }, { wch: 14 }, { wch: 12 }, { wch: 12 },
+        { wch: 24 }, { wch: 18 }, { wch: 16 },
       ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Uso App Ajudantes');
+      XLSX.writeFile(wb, `uso_app_ajudantes_${dataLocalISO(new Date())}.xlsx`);
+    } catch (err) {
+      console.error('Erro ao exportar uso do app por ajudante:', err);
+      alert('Erro ao exportar uso do app por ajudante');
+    } finally {
+      setExportandoAjudantes(false);
+    }
+  };
+
+  const handleExportarAppUsage = async () => {
+    setExportandoApp(true);
+    try {
+      const f = filtroRef.current;
+      const dados = await exportAppUsage(f.inicio || null, f.fim || null, f.tipo || null, f.unidade || null);
+      const rows = dados.map(r => ({
+        'CTRC': r.ctrc || '',
+        'Situação': r.ocorrencia || '',
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = [{ wch: 18 }, { wch: 60 }];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Uso do App');
       XLSX.writeFile(wb, `uso_app_${dataLocalISO(new Date())}.xlsx`);
@@ -407,6 +435,16 @@ export default function AdminDashboard() {
               </div>
             )}
             <div style={{ ...s.sectionTitle, marginTop: 32 }}>Ranking de Ajudantes por Posição</div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+              <button
+                type="button"
+                style={{ ...s.exportBtn, background: '#198754', color: '#fff', opacity: exportandoAjudantes ? 0.6 : 1 }}
+                onClick={handleExportarAppUsageAjudantes}
+                disabled={exportandoAjudantes || loading}
+              >
+                {exportandoAjudantes ? 'Exportando...' : '⬇ Exportar Excel'}
+              </button>
+            </div>
             {[
               { posicao: 'PRINCIPAL', titulo: 'Ajudante Principal', cor: '#f0c040' },
               { posicao: 'SEGUNDO', titulo: 'Ajudante 2', cor: '#3de8a0' },

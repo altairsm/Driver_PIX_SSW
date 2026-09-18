@@ -1,6 +1,5 @@
 import { pool } from '../db/index.js';
 import XLSX from 'xlsx';
-import { notifyNewComplaints } from './notificationService.js';
 
 const ASSUNTOS_FILTRO = ['acareacao', 'comprovante de entrega'];
 
@@ -119,13 +118,6 @@ export async function uploadReclamacoes(fileBuffer, fileName) {
         AND "OperadorMatricula" != 0
     `, [ctesNaoEncontrados]);
     rows.forEach(r => { if (r.matricula) matriculasAfetadas.add(r.matricula); });
-  }
-
-  // Notificar motoristas que receberam novas reclamações
-  if (matriculasAfetadas.size > 0) {
-    notifyNewComplaints(Array.from(matriculasAfetadas)).catch(err =>
-      console.error('Erro ao disparar notificações de reclamação:', err)
-    );
   }
 
   return resultado;

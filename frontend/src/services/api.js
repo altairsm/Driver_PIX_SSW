@@ -16,7 +16,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.config?.url?.includes('fcm-token') || err.config?.url?.includes('/upload/')) {
+    if (err.config?.url?.includes('/upload/')) {
       return Promise.reject(err);
     }
     const status = err.response?.status;
@@ -104,11 +104,6 @@ export async function updateDriverDados(dados) {
 
 export async function confirmarRegras() {
   const { data } = await api.post('/driver/confirmar-regras');
-  return data;
-}
-
-export async function saveFcmToken(token) {
-  const { data } = await api.post('/driver/fcm-token', { token });
   return data;
 }
 
@@ -324,6 +319,16 @@ export async function exportAppUsage(inicio, fim, tipo, unidade) {
   if (tipo) params.tipo = tipo;
   if (unidade) params.unidade = unidade;
   const { data } = await api.get('/admin/app-usage/export', { params, timeout: 300000 });
+  return data;
+}
+
+export async function exportAppUsageAjudantes(inicio, fim, tipo, unidade) {
+  const params = {};
+  if (inicio) params.inicio = inicio;
+  if (fim) params.fim = fim;
+  if (tipo) params.tipo = tipo;
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/app-usage-ajudantes/export', { params, timeout: 300000 });
   return data;
 }
 

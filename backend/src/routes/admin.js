@@ -7,7 +7,7 @@ import {
   listarMotoristas, criarMotorista, atualizarMotorista, deletarMotorista,
   getQuinzenasAdmin, getCidadesSemPreco, getCtrcsParados, getCtrcsParadosDetalhado, getCustoDaBase
 } from '../services/paymentService.js';
-import { getEficienciaTodos, getAppUsageTodos, getAppUsageAjudantes, getEscoamento } from '../services/driverService.js';
+import { getEficienciaTodos, getAppUsageTodos, getAppUsageAjudantes, getAppUsageAjudantesDetalhado, getEscoamento } from '../services/driverService.js';
 import { enviarSenhaPorEmail } from '../services/emailService.js';
 import {
   listarAjudantes, criarAjudante, atualizarAjudante, deletarAjudante
@@ -272,25 +272,16 @@ router.get('/app-usage/export', async (req, res) => {
     else dateFilter = `c.ocorrencia_data >= (CURRENT_DATE - INTERVAL '30 days')::date`;
 
     const { rows } = await pool.query(`
-      SELECT
+      SELECT DISTINCT ON (v.ctrc_normalizado)
         v.ctrc AS ctrc,
-        v.codigo_ocorrencia,
-        v.origem_ocorrencia AS origem,
-        v.ocorrencia AS ocorrencia,
-        to_char(c.ocorrencia_data, 'YYYY-MM-DD') AS data_ocorrencia,
-        v.unidade_receptora AS unidade,
-        v.cidade_entrega AS cidade,
-        v.ctrc_normalizado,
-        r.motorista_cpf AS cpf,
-        r.motorista_nome AS motorista,
-        m.tipo AS tipo
+        v.ocorrencia AS ocorrencia
       FROM ssw_455 v
       JOIN ssw_ctrcs c ON c.ctrc = v.ctrc_normalizado
       JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
       JOIN motoristas m ON m.cpf = r.motorista_cpf
       WHERE ${dateFilter} ${whereTipo}
         AND ${occurrenceCodeFilter}
-      ORDER BY r.motorista_nome, c.ocorrencia_data
+      ORDER BY v.ctrc_normalizado, c.ocorrencia_data DESC, c.data_emissao DESC
     `, params);
 
     res.json(rows);
@@ -356,6 +347,17 @@ router.get('/app-usage-ajudantes', async (req, res) => {
   } catch (err) {
     console.error('Erro ao buscar uso do app por ajudante:', err);
     res.status(500).json({ error: 'Erro ao buscar uso do app' });
+  }
+});
+
+router.get('/app-usage-ajudantes/export', async (req, res) => {
+  try {
+    const { inicio, fim, tipo, unidade } = req.query;
+    const data = await getAppUsageAjudantesDetalhado(inicio || null, fim || null, tipo || null, unidade || null);
+    res.json(data);
+  } catch (err) {
+    console.error('Erro ao exportar uso do app por ajudante:', err);
+    res.status(500).json({ error: 'Erro ao exportar uso do app' });
   }
 });
 

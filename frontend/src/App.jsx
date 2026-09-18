@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { initNotifications } from './services/notificationService'
 import Login from './pages/Login'
 import DriverDashboard from './pages/DriverDashboard'
 import DriverRegrasPagamento from './pages/DriverRegrasPagamento'
@@ -87,10 +86,6 @@ function RoleRoute({ children, allowedRoles }) {
 }
 
 function App() {
-  useEffect(() => {
-    initNotifications().catch(err => console.error('Erro ao inicializar notificações:', err));
-  }, []);
-
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
