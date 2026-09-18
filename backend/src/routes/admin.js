@@ -274,7 +274,8 @@ router.get('/app-usage/export', async (req, res) => {
     const { rows } = await pool.query(`
       SELECT DISTINCT ON (v.ctrc_normalizado)
         v.ctrc AS ctrc,
-        v.ocorrencia AS ocorrencia
+        v.ocorrencia AS ocorrencia,
+        v.origem_ocorrencia AS origem
       FROM ssw_455 v
       JOIN ssw_ctrcs c ON c.ctrc = v.ctrc_normalizado
       JOIN ssw_romaneios r ON r.id_romaneio = c.id_romaneio
@@ -568,7 +569,7 @@ router.get('/expedicao', async (req, res) => {
 
     if (unidade) { params.push(unidade); conditions.push(`q.unidade_receptora = $${params.length}`); }
 
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const where = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
 
     const { rows } = await pool.query(`
       SELECT
@@ -622,7 +623,7 @@ router.get('/expedicao-agrupada', async (req, res) => {
 
     if (unidade) { params.push(unidade); conditions.push(`q.unidade_receptora = $${params.length}`); }
 
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const where = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
 
     const { rows } = await pool.query(`
       SELECT

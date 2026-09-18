@@ -189,9 +189,10 @@ export default function AdminDashboard() {
       const rows = dados.map(r => ({
         'CTRC': r.ctrc || '',
         'Situação': r.ocorrencia || '',
+        'Origem': r.origem || '',
       }));
       const ws = XLSX.utils.json_to_sheet(rows);
-      ws['!cols'] = [{ wch: 18 }, { wch: 60 }];
+      ws['!cols'] = [{ wch: 18 }, { wch: 60 }, { wch: 10 }];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Uso do App');
       XLSX.writeFile(wb, `uso_app_${dataLocalISO(new Date())}.xlsx`);
