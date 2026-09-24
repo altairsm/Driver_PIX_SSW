@@ -162,7 +162,7 @@ export default function AdminDashboard() {
         'Cód. Ocorrência': r.codigo_ocorrencia || '',
         'Ocorrência': r.ocorrencia || '',
         'Data Ocorrência': fmtDate(r.data_ocorrencia),
-        'CTRC': r.ctrc_normalizado || '',
+        'CTRC': r.ctrc || '',
         'CPF': r.cpf || '',
         'Motorista': r.motorista || '',
         'Unidade': r.unidade || '',

@@ -689,6 +689,7 @@ router.get('/ctes-sem-romaneio', async (req, res) => {
       WHERE NOT EXISTS (
         SELECT 1 FROM ssw_ctrcs c WHERE c.ctrc = v.ctrc_normalizado
       )
+      AND p.ativo = true
       ${where}
       ORDER BY v.data_emissao DESC NULLS LAST, v.ctrc
     `, params);
