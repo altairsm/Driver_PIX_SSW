@@ -23,7 +23,7 @@ services:
       context: ./backend
       args:
         COMMIT_HASH: ${COMMIT_HASH:-unknown}
-        VERSION: ${VERSION:-v3.9.21}
+        VERSION: ${VERSION:-v3.9.22}
     container_name: driver-pey-backend
     ports:
       - "3001:3001"
@@ -35,6 +35,7 @@ services:
       DB_PASS: PUhgB0AZWAfhfm9qFe0sDcLzQG09hTGLkSC3eOa66e333b7b
       JWT_SECRET: 0e560c48d422acdbf0b106df4dc154c5
       GOOGLE_MAPS_API_KEY: AIzaSyArrv1bWt3ye29tPLyDkj38qc6P70jCctM
+      EXTERNAL_API_KEY: 9Lx7qR2mK4vNw8sT5bYcUzE1fH3JdPa
     depends_on:
       postgres:
         condition: service_healthy

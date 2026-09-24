@@ -15,6 +15,7 @@ import solicitacoesRoutes from './routes/solicitacoes.js';
 import pagadoresRoutes from './routes/pagadores.js';
 import ocorrenciasRoutes from './routes/ocorrencias.js';
 import unidadesRoutes from './routes/unidades.js';
+import externalRoutes from './routes/external.js';
 import { authenticateToken, requireAdmin, requireRole } from './middleware/auth.js';
 
 const app = express();
@@ -46,6 +47,8 @@ app.get('/health', (req, res) => {
 app.get('/version', (req, res) => {
   res.json({ commit: getCommitHash(), version: getVersion() });
 });
+
+app.use('/external', externalRoutes);
 
 app.use('/auth', authRoutes);
 app.use('/driver', driverRoutes);

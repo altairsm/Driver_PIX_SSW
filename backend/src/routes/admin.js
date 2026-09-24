@@ -662,6 +662,44 @@ router.get('/expedicao-agrupada', async (req, res) => {
   }
 });
 
+router.get('/ctes-sem-romaneio', async (req, res) => {
+  try {
+    const { unidade } = req.query;
+    const params = [];
+    let where = '';
+    if (unidade) {
+      params.push(unidade);
+      where = 'AND v.unidade_receptora = $1';
+    }
+
+    const { rows } = await pool.query(`
+      SELECT
+        v.ctrc,
+        COALESCE(p.nome_simplificado, v.cliente_pagador) AS cliente_pagador,
+        v.cidade_entrega,
+        v.numero_nota_fiscal,
+        v.setor_destino,
+        v.unidade_receptora,
+        v.valor_mercadoria,
+        v.peso_real,
+        v.cubagem_m3,
+        to_char(v.data_emissao, 'YYYY-MM-DD') AS data_emissao
+      FROM ssw_455 v
+      LEFT JOIN pagadores p ON p.cnpj = v.cnpj_pagador
+      WHERE NOT EXISTS (
+        SELECT 1 FROM ssw_ctrcs c WHERE c.ctrc = v.ctrc_normalizado
+      )
+      ${where}
+      ORDER BY v.data_emissao DESC NULLS LAST, v.ctrc
+    `, params);
+
+    res.json(rows);
+  } catch (err) {
+    console.error('Erro ao buscar CT-e sem romaneio:', err);
+    res.status(500).json({ error: 'Erro ao buscar CT-e sem romaneio' });
+  }
+});
+
 router.get('/gestao/export', async (req, res) => {
   try {
     const { inicio, fim, unidade } = req.query;

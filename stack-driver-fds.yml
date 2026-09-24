@@ -38,6 +38,7 @@ services:
       DB_PASSWORD: f18f8dd7ad0683fb97c91eb4852ff645
       GOOGLE_MAPS_API_KEY: AIzaSyArrv1bWt3ye29tPLyDkj38qc6P70jCctM
       JWT_SECRET: 0e560c48d422acdbf0b106df4dc154c5
+      EXTERNAL_API_KEY: 9Lx7qR2mK4vNw8sT5bYcUzE1fH3JdPa
       PORT: 3001
     deploy:
       replicas: 1

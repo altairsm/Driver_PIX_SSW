@@ -466,6 +466,13 @@ export async function getExpedicaoAgrupada(unidade) {
   return data;
 }
 
+export async function getCtesSemRomaneio(unidade) {
+  const params = {};
+  if (unidade) params.unidade = unidade;
+  const { data } = await api.get('/admin/ctes-sem-romaneio', { params });
+  return data;
+}
+
 // Upload SSW 455
 export async function uploadSsw455(file) {
   const formData = new FormData();

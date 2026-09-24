@@ -471,6 +471,7 @@ export async function runMigrations() {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_ssw_455_pagador ON ssw_455 (cnpj_pagador)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_ssw_455_unidade ON ssw_455 (unidade_receptora)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_ssw_455_codigo_ocorrencia ON ssw_455 (codigo_ocorrencia)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_ssw_455_numero_nota_fiscal ON ssw_455 (numero_nota_fiscal)');
     try { await pool.query('CREATE INDEX IF NOT EXISTS idx_motoristas_unidade ON motoristas (unidade)'); } catch {}
     console.log('  indexes 455/pagadores created');
 

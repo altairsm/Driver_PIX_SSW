@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getEficienciaMotoristas, getAppUsageMotoristas, getAppUsageAjudantes, getCtrcsParados, getCtrcsParadosDetalhado, getExpedicao, getExpedicaoAgrupada, getEscoamento, exportAppUsage, exportAppUsageAjudantes } from '../services/api';
+import { getEficienciaMotoristas, getAppUsageMotoristas, getAppUsageAjudantes, getCtrcsParados, getCtrcsParadosDetalhado, getExpedicao, getExpedicaoAgrupada, getCtesSemRomaneio, getEscoamento, exportAppUsage, exportAppUsageAjudantes } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import * as XLSX from 'xlsx';
 import Topbar, { UNIDADE_STORAGE_KEY } from '../components/Topbar';
@@ -44,6 +44,7 @@ export default function AdminDashboard() {
   const [ctrcsParados, setCtrcsParados] = useState([]);
   const [expedicao, setExpedicao] = useState([]);
   const [expedicaoAgrupada, setExpedicaoAgrupada] = useState([]);
+  const [ctesSemRomaneio, setCtesSemRomaneio] = useState([]);
   const [viewExpedicao, setViewExpedicao] = useState('agrupada');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -68,7 +69,7 @@ export default function AdminDashboard() {
       const fFim = f?.fim || null;
       const fTipo = f?.tipo || null;
       const fUnidade = f?.unidade || null;
-      const [ef, app, appAjud, esc, parados, exp, expAgrup] = await Promise.all([
+      const [ef, app, appAjud, esc, parados, exp, expAgrup, semRom] = await Promise.all([
         getEficienciaMotoristas(fInicio, fFim, fTipo, fUnidade),
         getAppUsageMotoristas(fInicio, fFim, fTipo, fUnidade),
         getAppUsageAjudantes(fInicio, fFim, fTipo, fUnidade),
@@ -76,6 +77,7 @@ export default function AdminDashboard() {
         getCtrcsParados(fUnidade),
         getExpedicao(fUnidade),
         getExpedicaoAgrupada(fUnidade),
+        getCtesSemRomaneio(fUnidade),
       ]);
       setEficiencia(ef);
       setAppUsage(app);
@@ -84,6 +86,7 @@ export default function AdminDashboard() {
       setCtrcsParados(parados);
       setExpedicao(exp);
       setExpedicaoAgrupada(expAgrup);
+      setCtesSemRomaneio(semRom);
     } catch {
       setError('Erro ao carregar dados do dashboard');
     } finally {
@@ -134,6 +137,7 @@ export default function AdminDashboard() {
   const [exportandoApp, setExportandoApp] = useState(false);
 
   const [exportandoAjudantes, setExportandoAjudantes] = useState(false);
+  const [exportandoSemRomaneio, setExportandoSemRomaneio] = useState(false);
 
   const handleExportarAppUsageAjudantes = async () => {
     setExportandoAjudantes(true);
@@ -200,6 +204,35 @@ export default function AdminDashboard() {
       alert('Erro ao exportar dados');
     } finally {
       setExportandoApp(false);
+    }
+  };
+
+  const handleExportarSemRomaneio = async () => {
+    setExportandoSemRomaneio(true);
+    try {
+      const f = filtroRef.current;
+      const dados = await getCtesSemRomaneio(f.unidade || null);
+      const rows = dados.map(r => ({
+        'CTRC': r.ctrc || '',
+        'Cliente': r.cliente_pagador || '',
+        'Cidade': r.cidade_entrega || '',
+        'NF': r.numero_nota_fiscal || '',
+        'Data Emissão': r.data_emissao ? fmtDia(r.data_emissao) : '',
+        'Setor Destino': r.setor_destino || '',
+        'Unidade': r.unidade_receptora || '',
+        'Valor Mercadoria': Number(r.valor_mercadoria || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+        'Peso (kg)': Number(r.peso_real || 0).toFixed(3),
+        'Cubagem (m³)': Number(r.cubagem_m3 || 0).toFixed(3),
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = [{ wch: 14 }, { wch: 28 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 20 }, { wch: 10 }, { wch: 18 }, { wch: 12 }, { wch: 12 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'CTEs Sem Romaneio');
+      XLSX.writeFile(wb, `ctes_sem_romaneio_${(f.unidade || 'todas')}_${dataLocalISO(new Date())}.xlsx`);
+    } catch {
+      alert('Erro ao exportar dados');
+    } finally {
+      setExportandoSemRomaneio(false);
     }
   };
 
@@ -322,6 +355,7 @@ export default function AdminDashboard() {
             { id: 'escoamento', label: 'Escoamento', icon: '🌊' },
             { id: 'aging', label: 'CTRCs Parados', icon: '⏳' },
             { id: 'expedicao', label: 'Expedição', icon: '📦' },
+            { id: 'semromaneio', label: 'Sem Romaneio', icon: '📋' },
           ].map(t => (
             <button key={t.id} style={{ ...s.tabBtn, ...(activeTab === t.id ? s.tabBtnActive : {}) }} onClick={() => setActiveTab(t.id)}>
               <span>{t.icon}</span> {t.label}
@@ -829,6 +863,81 @@ export default function AdminDashboard() {
                   </>
                 )}
               </>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'semromaneio' && (
+          <div style={s.section}>
+            <div style={s.sectionTitle}>CT-e's Sem Romaneio</div>
+            <div style={s.sectionSub}>
+              CT-e's da unidade que ainda não possuem romaneio alimentado pelo CSV 036.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+              <button
+                type="button"
+                style={{ ...s.exportBtn, background: '#198754', color: '#fff', opacity: exportandoSemRomaneio ? 0.6 : 1 }}
+                onClick={handleExportarSemRomaneio}
+                disabled={exportandoSemRomaneio || loading}
+              >
+                {exportandoSemRomaneio ? 'Exportando...' : '📥 Exportar Excel'}
+              </button>
+            </div>
+            <div style={s.agingCards}>
+              <div style={{ ...s.agingCard, borderBottomColor: '#ff5a5a' }}>
+                <div style={s.agingLbl}>CT-e's Sem Romaneio</div>
+                <div style={{ ...s.agingVal, color: '#ff5a5a' }}>{ctesSemRomaneio.length}</div>
+              </div>
+              <div style={{ ...s.agingCard, borderBottomColor: '#0d6efd' }}>
+                <div style={s.agingLbl}>Cubagem Total (m³)</div>
+                <div style={{ ...s.agingVal, color: '#0d6efd' }}>{ctesSemRomaneio.reduce((sm, r) => sm + (Number(r.cubagem_m3) || 0), 0).toFixed(3)}</div>
+              </div>
+              <div style={{ ...s.agingCard, borderBottomColor: '#f0c040' }}>
+                <div style={s.agingLbl}>Valor Mercadoria (R$)</div>
+                <div style={{ ...s.agingVal, color: '#f0c040' }}>{ctesSemRomaneio.reduce((sm, r) => sm + (Number(r.valor_mercadoria) || 0), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+              </div>
+              <div style={{ ...s.agingCard, borderBottomColor: '#a855f7' }}>
+                <div style={s.agingLbl}>Peso Total (kg)</div>
+                <div style={{ ...s.agingVal, color: '#a855f7' }}>{ctesSemRomaneio.reduce((sm, r) => sm + (Number(r.peso_real) || 0), 0).toFixed(3)}</div>
+              </div>
+            </div>
+            {ctesSemRomaneio.length === 0 ? (
+              <div style={s.empty}>Nenhum CT-e sem romaneio encontrado para os filtros selecionados.</div>
+            ) : (
+              <div style={s.tableWrap}>
+                <table style={s.table}>
+                  <thead>
+                    <tr>
+                      <th style={s.th}>CTRC</th>
+                      <th style={s.th}>Cliente</th>
+                      <th style={s.th}>Cidade</th>
+                      <th style={s.th}>NF</th>
+                      <th style={s.th}>Data Emissão</th>
+                      <th style={s.th}>Setor Destino</th>
+                      <th style={s.th}>Unidade</th>
+                      <th style={{ ...s.th, textAlign: 'right' }}>Valor Merc. (R$)</th>
+                      <th style={{ ...s.th, textAlign: 'right' }}>Peso (kg)</th>
+                      <th style={{ ...s.th, textAlign: 'right' }}>Cubagem (m³)</th>
+                    </tr>
+                  </thead>
+                  <tbody style={{ opacity: loading ? 0.55 : 1 }}>
+                    {ctesSemRomaneio.map((r, i) => (
+                      <tr key={i}>
+                        <td style={s.td}>{r.ctrc}</td>
+                        <td style={s.td}>{r.cliente_pagador}</td>
+                        <td style={s.td}>{r.cidade_entrega}</td>
+                        <td style={s.td}>{r.numero_nota_fiscal}</td>
+                        <td style={s.td}>{r.data_emissao ? fmtDia(r.data_emissao) : '—'}</td>
+                        <td style={s.td}>{r.setor_destino || '—'}</td>
+                        <td style={s.td}>{r.unidade_receptora}</td>
+                        <td style={{ ...s.td, textAlign: 'right' }}>{Number(r.valor_mercadoria || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        <td style={{ ...s.td, textAlign: 'right' }}>{Number(r.peso_real || 0).toFixed(3)}</td>
+                        <td style={{ ...s.td, textAlign: 'right' }}>{Number(r.cubagem_m3 || 0).toFixed(3)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         )}
