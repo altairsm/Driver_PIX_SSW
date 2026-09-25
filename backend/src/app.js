@@ -73,7 +73,8 @@ async function start() {
   try {
     await runMigrations();
   } catch (err) {
-    console.error('Migration failed, starting anyway:', err);
+    console.error('Migration failed, stopping startup:', err);
+    process.exit(1);
   }
   app.listen(PORT, () => {
     console.log(`SSW API running on http://localhost:${PORT}`);

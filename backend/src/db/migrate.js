@@ -37,6 +37,69 @@ export async function runMigrations() {
     }
     console.log('  -> motoristas (email, role, password_hash, pre_aprovado)');
 
+    await pool.query(`CREATE TABLE IF NOT EXISTS celulares (
+      id SERIAL PRIMARY KEY,
+      numero VARCHAR(20) NOT NULL UNIQUE,
+      nome VARCHAR(200) NOT NULL,
+      criado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`);
+    console.log('  -> celulares');
+
+    for (const col of [
+      "ADD COLUMN IF NOT EXISTS celular_id INTEGER",
+      "ADD COLUMN IF NOT EXISTS celular_atualizado_em TIMESTAMPTZ"
+    ]) {
+      await pool.query(`ALTER TABLE motoristas ${col}`);
+    }
+
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE table_name = 'motoristas' AND constraint_name = 'motorista_celular_id_fkey'
+        ) THEN
+          ALTER TABLE motoristas
+            ADD CONSTRAINT motorista_celular_id_fkey
+            FOREIGN KEY (celular_id) REFERENCES celulares(id) ON DELETE SET NULL;
+        END IF;
+      END $$
+    `);
+
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_motorista_celular_id ON motoristas(celular_id) WHERE celular_id IS NOT NULL`);
+
+    await pool.query(`
+      INSERT INTO celulares (numero, nome)
+      SELECT DISTINCT
+        regexp_replace(COALESCE(telefone, ''), '[^0-9]', '', 'g') AS numero,
+        'Celular ' || regexp_replace(COALESCE(telefone, ''), '[^0-9]', '', 'g') AS nome
+      FROM motoristas
+      WHERE regexp_replace(COALESCE(telefone, ''), '[^0-9]', '', 'g') <> ''
+        AND length(regexp_replace(COALESCE(telefone, ''), '[^0-9]', '', 'g')) BETWEEN 10 AND 20
+      ON CONFLICT (numero) DO NOTHING
+    `);
+
+    await pool.query(`
+      UPDATE motoristas m
+      SET celular_id = c.id,
+          telefone = c.numero,
+          celular_atualizado_em = COALESCE(m.celular_atualizado_em, CURRENT_TIMESTAMP)
+      FROM celulares c
+      WHERE m.celular_id IS NULL
+        AND regexp_replace(COALESCE(m.telefone, ''), '[^0-9]', '', 'g') = c.numero
+        AND length(regexp_replace(COALESCE(m.telefone, ''), '[^0-9]', '', 'g')) BETWEEN 10 AND 20
+        AND 1 = (
+          SELECT COUNT(*)
+          FROM motoristas m2
+          WHERE regexp_replace(COALESCE(m2.telefone, ''), '[^0-9]', '', 'g') = c.numero
+            AND length(regexp_replace(COALESCE(m2.telefone, ''), '[^0-9]', '', 'g')) BETWEEN 10 AND 20
+        )
+    `);
+
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_motorista_celular_atualizado_em ON motoristas(celular_atualizado_em DESC)`);
+    console.log('  -> motorista (celular_id, celular_atualizado_em)');
+
     await pool.query(`CREATE TABLE IF NOT EXISTS ajudantes (
       codigo VARCHAR(20) PRIMARY KEY,
       nome VARCHAR(200) NOT NULL,

@@ -1,43 +1,64 @@
 import { useState, useEffect } from 'react';
-import { getMotoristas, createMotorista, updateMotorista, deleteMotorista, sendMotoristaPassword, getUnidades } from '../services/api';
+import { getMotoristas, createMotorista, updateMotorista, deleteMotorista, sendMotoristaPassword, getUnidades, getCelulares } from '../services/api';
 import Topbar from '../components/Topbar';
+
+function formatPhone(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '—';
+  if (digits.length <= 5) return digits;
+  if (digits.length <= 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+}
+
+function formatDateTime(value) {
+  return value ? new Date(value).toLocaleString('pt-BR') : '—';
+}
 
 export default function AdminMotoristas() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isAdmin = user.role === 'admin';
   const [motoristas, setMotoristas] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState(null);
-  const [form, setForm] = useState({ cpf: '', nome: '', telefone: '', pix_tipo: 'CPF', cnpj_mei: '', bonus_d0: 0, email: '', role: 'motorista', pre_aprovado: false });
+  const [form, setForm] = useState({ cpf: '', nome: '', celular_id: '', pix_tipo: 'CPF', cnpj_mei: '', bonus_d0: 0, email: '', role: 'motorista', pre_aprovado: false, unidade: '', tipo: 'funcionario' });
+  const [celularAlterado, setCelularAlterado] = useState(false);
+  const [celulares, setCelulares] = useState([]);
   const [salvando, setSalvando] = useState(false);
   const [enviandoSenha, setEnviandoSenha] = useState(null);
   const [unidades, setUnidades] = useState([]);
 
   const carregar = async () => {
-    setLoading(true);
     try { setMotoristas(await getMotoristas()); }
     catch { setMotoristas([]); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { carregar(); }, []);
+  useEffect(() => {
+    getMotoristas()
+      .then(setMotoristas)
+      .catch(() => setMotoristas([]))
+      .finally(() => setLoading(false));
+  }, []);
   useEffect(() => { getUnidades().then(setUnidades).catch(() => {}); }, []);
+  useEffect(() => { getCelulares().then(setCelulares).catch(() => setCelulares([])); }, []);
 
   const abrirNovo = () => {
     setEditando(null);
-    setForm({ cpf: '', nome: '', telefone: '', pix_tipo: 'CPF', cnpj_mei: '', bonus_d0: 0, email: '', role: 'motorista', pre_aprovado: false, unidade: '', tipo: 'funcionario' });
+    setCelularAlterado(false);
+    setForm({ cpf: '', nome: '', celular_id: '', pix_tipo: 'CPF', cnpj_mei: '', bonus_d0: 0, email: '', role: 'motorista', pre_aprovado: false, unidade: '', tipo: 'funcionario' });
     setError('');
     setModalAberto(true);
   };
 
   const abrirEditar = (m) => {
     setEditando(m);
+    setCelularAlterado(false);
     setForm({
       cpf: m.cpf || '',
       nome: m.nome || '',
-      telefone: m.telefone || '',
+      celular_id: m.celular_id ? String(m.celular_id) : '',
       pix_tipo: m.pix_tipo || 'CPF',
       cnpj_mei: m.cnpj_mei || '',
       bonus_d0: m.bonus_d0 || 0,
@@ -51,9 +72,35 @@ export default function AdminMotoristas() {
     setModalAberto(true);
   };
 
-  const fecharModal = () => { setModalAberto(false); setEditando(null); };
+  const fecharModal = () => {
+    setModalAberto(false);
+    setEditando(null);
+    setCelularAlterado(false);
+  };
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((current) => ({ ...current, [name]: value }));
+    if (name === 'celular_id') setCelularAlterado(true);
+  };
+
+  const recarregarDados = async () => {
+    await Promise.all([
+      carregar(),
+      getCelulares().then(setCelulares).catch(() => {}),
+    ]);
+  };
+
+  const salvar = async (forcarTransferencia = false) => {
+    const payload = { ...form };
+    if (!celularAlterado) delete payload.celular_id;
+    if (forcarTransferencia) payload.forcar_transferencia = true;
+    if (editando) {
+      await updateMotorista(editando.cpf, payload);
+    } else {
+      await createMotorista(payload);
+    }
+  };
 
   const handleSalvar = async (e) => {
     e.preventDefault();
@@ -64,15 +111,34 @@ export default function AdminMotoristas() {
     setSalvando(true);
     setError('');
     try {
-      if (editando) {
-        await updateMotorista(editando.cpf, form);
-      } else {
-        await createMotorista(form);
-      }
+      await salvar();
       fecharModal();
-      await carregar();
+      await recarregarDados();
     } catch (err) {
-      setError(err.response?.data?.error || 'Erro ao salvar');
+      if (err.response?.status === 409 && err.response.data?.code === 'CELULAR_EM_USO') {
+        const conflict = err.response.data.conflict || {};
+        const numero = formatPhone(conflict.numero);
+        const owners = Array.isArray(conflict.owners) && conflict.owners.length > 0
+          ? conflict.owners
+          : [{ cpf: conflict.cpf, nome: conflict.nome }];
+        const ownerDescription = owners.length > 1
+          ? `${owners.length} motoristas`
+          : `${owners[0].nome || 'outro motorista'} (${owners[0].cpf || 'CPF não informado'})`;
+        const mensagem = `O celular ${numero} já pertence a ${ownerDescription}. Deseja transferir o número?`;
+        if (window.confirm(mensagem)) {
+          try {
+            await salvar(true);
+            fecharModal();
+            await recarregarDados();
+          } catch (secondError) {
+            setError(secondError.response?.data?.error || 'Erro ao salvar');
+          }
+        } else {
+          setError('Transferência não confirmada. O cadastro não foi alterado.');
+        }
+      } else {
+        setError(err.response?.data?.error || 'Erro ao salvar');
+      }
     } finally {
       setSalvando(false);
     }
@@ -83,7 +149,7 @@ export default function AdminMotoristas() {
     if (!confirm(`Confirma exclusão de ${m.nome}? Romaneios vinculados serão removidos.`)) return;
     try {
       await deleteMotorista(m.cpf);
-      await carregar();
+      await recarregarDados();
     } catch (err) {
       alert(err.response?.data?.error || 'Erro ao excluir');
     }
@@ -145,9 +211,11 @@ export default function AdminMotoristas() {
                     <th style={s.th}>E-mail</th>
                     <th style={s.th}>Perfil</th>
                     <th style={s.th}>Unidade</th>
-                    <th style={s.th}>Adiantamento</th>
-                    <th style={s.th}>Telefone</th>
-                    <th style={s.th}>Bônus D0</th>
+                     <th style={s.th}>Adiantamento</th>
+                     <th style={s.th}>Celular atual</th>
+                     <th style={s.th}>Nome do aparelho</th>
+                     <th style={s.th}>Atualizado em</th>
+                     <th style={s.th}>Bônus D0</th>
                     <th style={s.th}>Ações</th>
                   </tr></thead>
                   <tbody>
@@ -166,8 +234,10 @@ export default function AdminMotoristas() {
                             <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: '0.68rem', fontWeight: 600, background: '#2a2f3e', color: '#6b7280' }}>MANUAL</span>
                           )}
                         </td>
-                        <td style={s.td}>{m.telefone || '—'}</td>
-                        <td style={{ ...s.td, color: '#3de8a0' }}>R$ {Number(m.bonus_d0 || 0).toFixed(2)}</td>
+                         <td style={s.td}>{formatPhone(m.telefone)}</td>
+                         <td style={s.td}>{m.celular_nome || '—'}</td>
+                         <td style={s.td}>{formatDateTime(m.celular_atualizado_em)}</td>
+                         <td style={{ ...s.td, color: '#3de8a0' }}>R$ {Number(m.bonus_d0 || 0).toFixed(2)}</td>
                         <td style={{ ...s.td, whiteSpace: 'nowrap' }}>
                           {m.email && <button style={s.btnSm('#0d6efd', '#fff')} onClick={() => handleEnviarSenha(m)} disabled={enviandoSenha === m.cpf}>
                             {enviandoSenha === m.cpf ? '...' : 'Senha'}
@@ -237,11 +307,17 @@ export default function AdminMotoristas() {
                     {unidades.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
-                <div style={s.field}>
-                  <label style={s.label}>Telefone</label>
-                  <input style={s.input} name="telefone" value={form.telefone}
-                    onChange={(e) => setForm({...form, telefone: e.target.value.replace(/\D/g, '')})} />
-                </div>
+                 <div style={s.field}>
+                   <label style={s.label}>Celular atual</label>
+                   <select style={s.select} name="celular_id" value={form.celular_id} onChange={handleChange}>
+                     <option value="">Não informado</option>
+                     {celulares.map(c => (
+                       <option key={c.id} value={String(c.id)}>
+                         {formatPhone(c.numero)} — {c.nome}{c.motorista_cpf && c.motorista_cpf !== editando?.cpf ? ` (em uso por ${c.motorista_nome})` : ''}
+                       </option>
+                     ))}
+                   </select>
+                 </div>
                 <div style={s.field}>
                   <label style={s.label}>Tipo PIX</label>
                   <select style={s.select} name="pix_tipo" value={form.pix_tipo} onChange={handleChange}>

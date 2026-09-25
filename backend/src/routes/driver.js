@@ -119,8 +119,11 @@ router.get('/dados', async (req, res) => {
 
 router.put('/dados', async (req, res) => {
   try {
-    const { cnpj_mei, telefone, pix_tipo } = req.body;
-    const result = await atualizarDriverDados(req.user.cpf, { cnpj_mei, telefone, pix_tipo });
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'telefone')) {
+      return res.status(409).json({ error: 'O celular é mantido exclusivamente pela administração', code: 'TELEFONE_PROTEGIDO' });
+    }
+    const { cnpj_mei, pix_tipo } = req.body;
+    const result = await atualizarDriverDados(req.user.cpf, { cnpj_mei, pix_tipo });
     res.json(result);
   } catch (err) {
     console.error(err);

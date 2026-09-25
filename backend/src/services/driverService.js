@@ -7,9 +7,22 @@ const APP_USAGE_CODE_FILTER = (paramPosition) => `LPAD(TRIM(COALESCE(v.codigo_oc
 
 export async function getDriverData(cpf) {
   const result = await pool.query(`
-    SELECT cpf, nome, telefone, leu_regras, cnpj_mei, pix_tipo, bonus_d0, pre_aprovado
-    FROM motoristas
-    WHERE cpf = $1
+    SELECT
+      m.cpf,
+      m.nome,
+      COALESCE(c.numero, m.telefone) AS telefone,
+      m.leu_regras,
+      m.cnpj_mei,
+      m.pix_tipo,
+      m.bonus_d0,
+      m.pre_aprovado,
+      m.celular_id,
+      m.celular_atualizado_em,
+      c.nome AS celular_nome,
+      c.numero AS celular_numero
+    FROM motoristas m
+    LEFT JOIN celulares c ON c.id = m.celular_id
+    WHERE m.cpf = $1
   `, [cpf]);
   return result.rows[0] || null;
 }
@@ -304,12 +317,12 @@ export async function getDriverDados(cpf) {
 }
 
 export async function atualizarDriverDados(cpf, dados) {
-  const { cnpj_mei, telefone, pix_tipo } = dados;
+  const { cnpj_mei, pix_tipo } = dados;
   await pool.query(`
     UPDATE motoristas
-    SET cnpj_mei = $1, telefone = $2, pix_tipo = $3
-    WHERE cpf = $4
-  `, [cnpj_mei || null, telefone || null, pix_tipo, cpf]);
+    SET cnpj_mei = $1, pix_tipo = $2
+    WHERE cpf = $3
+  `, [cnpj_mei || null, pix_tipo || 'CPF', cpf]);
   return { success: true };
 }
 

@@ -13,8 +13,23 @@ import {
   listarAjudantes, criarAjudante, atualizarAjudante, deletarAjudante
 } from '../services/ajudanteService.js';
 import { getRede, getRedePeriodo } from '../services/redeService.js';
+import {
+  listarCelulares, criarCelular, atualizarCelular, deletarCelular
+} from '../services/celularService.js';
 
 const router = Router();
+
+function responderErroAdmin(res, err, mensagemPadrao) {
+  if (err.status) {
+    const body = { error: err.message };
+    if (err.code) body.code = err.code;
+    if (err.conflict) body.conflict = err.conflict;
+    if (err.numero) body.numero = err.numero;
+    return res.status(err.status).json(body);
+  }
+  console.error(err);
+  return res.status(500).json({ error: mensagemPadrao });
+}
 
 router.get('/quinzenas', async (req, res) => {
   try {
@@ -41,13 +56,48 @@ router.get('/pagamentos', async (req, res) => {
   }
 });
 
-router.get('/motoristas', async (req, res) => {
+router.get('/motoristas', requireRole('admin'), async (req, res) => {
   try {
     const motoristas = await listarMotoristas();
     res.json(motoristas);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+router.get('/celulares', requireRole('admin'), async (req, res) => {
+  try {
+    res.json(await listarCelulares());
+  } catch (err) {
+    return responderErroAdmin(res, err, 'Erro ao listar celulares');
+  }
+});
+
+router.post('/celulares', requireRole('admin'), async (req, res) => {
+  try {
+    const celular = await criarCelular(req.body);
+    res.status(201).json(celular);
+  } catch (err) {
+    return responderErroAdmin(res, err, 'Erro ao cadastrar celular');
+  }
+});
+
+router.put('/celulares/:id', requireRole('admin'), async (req, res) => {
+  try {
+    const celular = await atualizarCelular(req.params.id, req.body);
+    res.json(celular);
+  } catch (err) {
+    return responderErroAdmin(res, err, 'Erro ao atualizar celular');
+  }
+});
+
+router.delete('/celulares/:id', requireRole('admin'), async (req, res) => {
+  try {
+    await deletarCelular(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    return responderErroAdmin(res, err, 'Erro ao excluir celular');
   }
 });
 
@@ -68,7 +118,7 @@ router.post('/confirmar-pagamento', requireRole('admin'), async (req, res) => {
 
 router.post('/motoristas', requireRole('admin'), async (req, res) => {
   try {
-    const { cpf, nome, telefone, pix_tipo, unidade } = req.body;
+    const { cpf, nome } = req.body;
     if (!cpf || !nome) {
       return res.status(400).json({ error: 'CPF e nome são obrigatórios' });
     }
@@ -78,8 +128,7 @@ router.post('/motoristas', requireRole('admin'), async (req, res) => {
     if (err.code === '23505') {
       return res.status(409).json({ error: 'CPF já cadastrado' });
     }
-    console.error('Erro ao criar motorista:', err);
-    res.status(500).json({ error: 'Erro ao criar motorista' });
+    return responderErroAdmin(res, err, 'Erro ao criar motorista');
   }
 });
 
@@ -90,8 +139,7 @@ router.put('/motoristas/:cpf', requireRole('admin'), async (req, res) => {
     if (!atualizado) return res.status(404).json({ error: 'Motorista não encontrado' });
     res.json({ success: true });
   } catch (err) {
-    console.error('Erro ao atualizar motorista:', err);
-    res.status(500).json({ error: 'Erro ao atualizar motorista' });
+    return responderErroAdmin(res, err, 'Erro ao atualizar motorista');
   }
 });
 

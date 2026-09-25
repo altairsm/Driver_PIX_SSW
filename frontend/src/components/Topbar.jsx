@@ -40,6 +40,7 @@ const GRUPOS = [
     icon: '⚙️',
     items: [
       { label: 'Motoristas', path: '/admin/motoristas', roles: ['admin'] },
+      { label: 'Celulares', path: '/admin/celulares', roles: ['admin'] },
       { label: 'Ajudantes', path: '/admin/ajudantes', roles: ['admin'] },
       { label: 'Unidades', path: '/admin/unidades', roles: ['admin'] },
       { label: 'Configurações', path: '/admin/configuracoes', roles: ['admin'] },

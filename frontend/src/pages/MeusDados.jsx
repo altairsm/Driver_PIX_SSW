@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { getDriverDados, updateDriverDados } from '../services/api';
 
 function formatCNPJ(v) {
@@ -12,7 +11,8 @@ function formatCNPJ(v) {
 }
 
 function formatPhone(v) {
-  const d = v.replace(/\D/g, '').slice(0, 13);
+  const d = String(v || '').replace(/\D/g, '').slice(0, 13);
+  if (!d) return '-';
   if (d.length <= 2) return `+${d}`;
   if (d.length <= 4) return `+${d.slice(0, 2)} (${d.slice(2)}`;
   if (d.length <= 9) return `+${d.slice(0, 2)} (${d.slice(2, 4)}) ${d.slice(4)}`;
@@ -20,7 +20,6 @@ function formatPhone(v) {
 }
 
 export default function MeusDados() {
-  const navigate = useNavigate();
   const [dados, setDados] = useState(null);
   const [cnpj, setCnpj] = useState('');
   const [telefone, setTelefone] = useState('');
@@ -52,7 +51,6 @@ export default function MeusDados() {
       const cnpjClean = cnpj.replace(/\D/g, '');
       await updateDriverDados({
         cnpj_mei: cnpjClean || null,
-        telefone: telefone || null,
         pix_tipo: pixTipo,
       });
       const updated = await getDriverDados();
@@ -99,10 +97,12 @@ export default function MeusDados() {
             <label style={s.label}>CNPJ do MEI</label>
             <input style={s.input} value={cnpj} onChange={e => setCnpj(formatCNPJ(e.target.value))} placeholder="XX.XXX.XXX/XXXX-XX" />
           </div>
-          <div style={s.field}>
-            <label style={s.label}>Telefone Celular</label>
-            <input style={s.input} value={telefone} onChange={e => setTelefone(formatPhone(e.target.value))} placeholder="+55 (71) 99999-9999" />
-          </div>
+           <div style={s.field}>
+             <label style={s.label}>Celular atual</label>
+             <div style={s.readOnlyValue}>{formatPhone(telefone)}</div>
+             {dados?.celular_nome && <div style={s.readOnlyHint}>Aparelho: {dados.celular_nome}</div>}
+             {dados?.celular_atualizado_em && <div style={s.readOnlyHint}>Atualizado em: {new Date(dados.celular_atualizado_em).toLocaleString('pt-BR')}</div>}
+           </div>
           <div style={s.field}>
             <label style={s.label}>Chave PIX para recebimento</label>
             <select style={s.select} value={pixTipo} onChange={e => setPixTipo(e.target.value)}>
@@ -134,6 +134,8 @@ const s = {
   field: { marginBottom: 20 },
   label: { display: 'block', color: '#9ca3af', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 6 },
   input: { width: '100%', background: '#1e2230', border: '1px solid #2a2f3e', color: '#e8eaf0', padding: '12px 16px', fontSize: '0.9rem', borderRadius: 4, outline: 'none', fontFamily: "'IBM Plex Mono', monospace", boxSizing: 'border-box' },
+  readOnlyValue: { width: '100%', background: '#161920', border: '1px solid #2a2f3e', color: '#e8eaf0', padding: '12px 16px', fontSize: '0.9rem', borderRadius: 4, fontFamily: "'IBM Plex Mono', monospace", boxSizing: 'border-box' },
+  readOnlyHint: { color: '#6b7280', fontSize: '0.7rem', marginTop: 6, fontFamily: "'IBM Plex Mono', monospace" },
   select: { width: '100%', background: '#1e2230', border: '1px solid #2a2f3e', color: '#e8eaf0', padding: '12px 16px', fontSize: '0.9rem', borderRadius: 4, outline: 'none', fontFamily: "'IBM Plex Mono', monospace", boxSizing: 'border-box', cursor: 'pointer' },
   saveBtn: { background: '#f0c040', color: '#0d0f14', border: 'none', padding: '14px', fontSize: '0.85rem', fontWeight: 600, borderRadius: 4, cursor: 'pointer', width: '100%', fontFamily: "'IBM Plex Mono', monospace", letterSpacing: '1px' },
   saveBtnDisabled: { background: '#2a2f3e', color: '#6b7280', cursor: 'not-allowed' },

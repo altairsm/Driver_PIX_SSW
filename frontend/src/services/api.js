@@ -160,6 +160,26 @@ export async function deleteMotorista(cpf) {
   return data;
 }
 
+export async function getCelulares() {
+  const { data } = await api.get('/admin/celulares');
+  return data;
+}
+
+export async function createCelular(dados) {
+  const { data } = await api.post('/admin/celulares', dados);
+  return data;
+}
+
+export async function updateCelular(id, dados) {
+  const { data } = await api.put(`/admin/celulares/${id}`, dados);
+  return data;
+}
+
+export async function deleteCelular(id) {
+  const { data } = await api.delete(`/admin/celulares/${id}`);
+  return data;
+}
+
 export async function getAjudantes(unidade) {
   const params = {};
   if (unidade) params.unidade = unidade;

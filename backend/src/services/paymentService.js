@@ -1,4 +1,5 @@
 import { pool } from '../db/index.js';
+import { aplicarCelularAoMotorista, bloquearRelacoesCelulares, normalizarNumeroCelular, obterOuCriarCelularPorNumero } from './celularService.js';
 
 export async function calcularPagamentos(inicio, fim, unidade) {
   const unidadeClause = unidade ? `AND c.unidade_receptora = $3` : '';
@@ -146,9 +147,26 @@ export async function confirmarPagamento(cpf, periodo) {
 
 export async function listarMotoristas() {
   const result = await pool.query(`
-    SELECT cpf, nome, telefone, pix_tipo, cnpj_mei, bonus_d0, leu_regras, email, role, pre_aprovado, unidade, tipo
-    FROM motoristas
-    ORDER BY nome
+    SELECT
+      m.cpf,
+      m.nome,
+      COALESCE(c.numero, m.telefone) AS telefone,
+      m.pix_tipo,
+      m.cnpj_mei,
+      m.bonus_d0,
+      m.leu_regras,
+      m.email,
+      m.role,
+      m.pre_aprovado,
+      m.unidade,
+      m.tipo,
+      m.celular_id,
+      m.celular_atualizado_em,
+      c.nome AS celular_nome,
+      c.numero AS celular_numero
+    FROM motoristas m
+    LEFT JOIN celulares c ON c.id = m.celular_id
+    ORDER BY m.celular_atualizado_em DESC NULLS LAST, m.nome
   `);
   return result.rows;
 }
@@ -175,34 +193,115 @@ export async function getQuinzenasAdmin() {
   return result.rows;
 }
 
+async function resolverCelularParaSalvar(client, cpf, dados) {
+  const possuiCelularId = Object.prototype.hasOwnProperty.call(dados, 'celular_id');
+  if (possuiCelularId) {
+    return aplicarCelularAoMotorista(client, cpf, dados.celular_id, {
+      forcarTransferencia: dados.forcar_transferencia === true,
+      provided: true,
+    });
+  }
+
+  if (Object.prototype.hasOwnProperty.call(dados, 'telefone')) {
+    const celular = await obterOuCriarCelularPorNumero(client, dados.telefone);
+    return aplicarCelularAoMotorista(client, cpf, celular?.id || null, {
+      forcarTransferencia: dados.forcar_transferencia === true,
+      provided: true,
+    });
+  }
+
+  return { changed: false };
+}
+
 export async function criarMotorista(dados) {
   const { cpf, nome, telefone, pix_tipo, cnpj_mei, bonus_d0, email, role, pre_aprovado, unidade, tipo } = dados;
-  await pool.query(`
-    INSERT INTO motoristas (cpf, nome, telefone, pix_tipo, cnpj_mei, bonus_d0, email, role, pre_aprovado, unidade, tipo)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-    ON CONFLICT (cpf) DO UPDATE SET
-      nome = EXCLUDED.nome,
-      telefone = EXCLUDED.telefone,
-      pix_tipo = EXCLUDED.pix_tipo,
-      cnpj_mei = EXCLUDED.cnpj_mei,
-      bonus_d0 = EXCLUDED.bonus_d0,
-      email = COALESCE(EXCLUDED.email, motoristas.email),
-      role = COALESCE(EXCLUDED.role, motoristas.role),
-      pre_aprovado = EXCLUDED.pre_aprovado,
-      unidade = EXCLUDED.unidade,
-      tipo = EXCLUDED.tipo
-  `, [cpf, nome, telefone || null, pix_tipo || 'CPF', cnpj_mei || null, bonus_d0 ?? 0, email || null, role || 'motorista', pre_aprovado ?? false, unidade || null, tipo || 'funcionario']);
-  return { cpf, nome, telefone, pix_tipo, cnpj_mei, bonus_d0, email, role, pre_aprovado, unidade, tipo };
+  const possuiCelularId = Object.prototype.hasOwnProperty.call(dados, 'celular_id');
+  const telefoneNormalizado = possuiCelularId ? null : normalizarNumeroCelular(telefone) || null;
+  const cliente = await pool.connect();
+
+  try {
+    await cliente.query('BEGIN');
+    await bloquearRelacoesCelulares(cliente);
+    await cliente.query(`
+      INSERT INTO motoristas (cpf, nome, telefone, pix_tipo, cnpj_mei, bonus_d0, email, role, pre_aprovado, unidade, tipo)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `, [cpf, nome, telefoneNormalizado, pix_tipo || 'CPF', cnpj_mei || null, bonus_d0 ?? 0, email || null, role || 'motorista', pre_aprovado ?? false, unidade || null, tipo || 'funcionario']);
+
+    await resolverCelularParaSalvar(cliente, cpf, dados);
+
+    const result = await cliente.query(`
+      SELECT m.cpf, m.nome, COALESCE(c.numero, m.telefone) AS telefone, m.pix_tipo,
+             m.cnpj_mei, m.bonus_d0, m.email, m.role, m.pre_aprovado, m.unidade, m.tipo,
+             m.celular_id, m.celular_atualizado_em, c.nome AS celular_nome,
+             c.numero AS celular_numero
+      FROM motoristas m
+      LEFT JOIN celulares c ON c.id = m.celular_id
+      WHERE m.cpf = $1
+    `, [cpf]);
+
+    await cliente.query('COMMIT');
+    return result.rows[0];
+  } catch (err) {
+    await cliente.query('ROLLBACK');
+    throw err;
+  } finally {
+    cliente.release();
+  }
 }
 
 export async function atualizarMotorista(cpf, dados) {
   const { nome, telefone, pix_tipo, cnpj_mei, bonus_d0, email, role, pre_aprovado, unidade, tipo } = dados;
-  const result = await pool.query(`
+  const possuiCelularId = Object.prototype.hasOwnProperty.call(dados, 'celular_id');
+  const possuiTelefone = Object.prototype.hasOwnProperty.call(dados, 'telefone');
+  const telefoneNormalizado = possuiCelularId ? null : normalizarNumeroCelular(telefone) || null;
+  const cliente = await pool.connect();
+  const querySemTelefone = possuiCelularId || !possuiTelefone;
+  const query = querySemTelefone ? `
     UPDATE motoristas
-    SET nome = $1, telefone = $2, pix_tipo = $3, cnpj_mei = $4, bonus_d0 = $5, email = $6, role = $7, pre_aprovado = $8, unidade = $9, tipo = $10
+    SET nome = $1,
+        telefone = motoristas.telefone,
+        pix_tipo = $2,
+        cnpj_mei = $3,
+        bonus_d0 = $4,
+        email = $5,
+        role = $6,
+        pre_aprovado = $7,
+        unidade = $8,
+        tipo = $9
+    WHERE cpf = $10
+  ` : `
+    UPDATE motoristas
+    SET nome = $1,
+        telefone = $2,
+        pix_tipo = $3,
+        cnpj_mei = $4,
+        bonus_d0 = $5,
+        email = $6,
+        role = $7,
+        pre_aprovado = $8,
+        unidade = $9,
+        tipo = $10
     WHERE cpf = $11
-  `, [nome, telefone || null, pix_tipo || 'CPF', cnpj_mei || null, bonus_d0 ?? 0, email || null, role || 'motorista', pre_aprovado ?? false, unidade || null, tipo || 'funcionario', cpf]);
-  return result.rowCount > 0;
+  `;
+  const params = querySemTelefone
+    ? [nome, pix_tipo || 'CPF', cnpj_mei || null, bonus_d0 ?? 0, email || null, role || 'motorista', pre_aprovado ?? false, unidade || null, tipo || 'funcionario', cpf]
+    : [nome, telefoneNormalizado, pix_tipo || 'CPF', cnpj_mei || null, bonus_d0 ?? 0, email || null, role || 'motorista', pre_aprovado ?? false, unidade || null, tipo || 'funcionario', cpf];
+
+  try {
+    await cliente.query('BEGIN');
+    await bloquearRelacoesCelulares(cliente);
+    const result = await cliente.query(query, params);
+
+    if (result.rowCount === 0) throw Object.assign(new Error('Motorista não encontrado'), { status: 404 });
+    await resolverCelularParaSalvar(cliente, cpf, dados);
+    await cliente.query('COMMIT');
+    return true;
+  } catch (err) {
+    await cliente.query('ROLLBACK');
+    throw err;
+  } finally {
+    cliente.release();
+  }
 }
 
 export async function deletarMotorista(cpf) {
